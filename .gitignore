@@ -1,0 +1,48 @@
+############################
+# OS / IDE
+############################
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+############################
+# Python / FastAPI
+############################
+backend/venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/.env
+
+############################
+# Uploaded images (keep locally, not github)
+############################
+backend/uploads/*
+!backend/uploads/.keep
+!backend/uploads/fields/.keep
+!backend/uploads/farmers/.keep
+
+############################
+# Flutter / Mobile
+############################
+frontend_mobile/wheat_disease_clean/.dart_tool/
+frontend_mobile/wheat_disease_clean/build/
+frontend_mobile/wheat_disease_clean/android/.gradle/
+frontend_mobile/wheat_disease_clean/ios/Pods/
+
+############################
+# React Web
+############################
+frontend-web/node_modules/
+frontend-web/dist/
+
+############################
+# Models (VERY IMPORTANT)
+############################
+backend/app/ml/*.pth
+backend/app/ml/*.onnx
+
+############################
+# Logs
+############################
+*.log
