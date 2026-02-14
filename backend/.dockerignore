@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Virtual env
+venv/
+.env
+.env.*
+
+# Uploads
+uploads/
+app/uploads/
+
+# ML models (huge)
+app/ml/*.onnx
+app/ml/*.pth
+app/ml/*.pt
+
+# Logs
+*.log
+
+# Git
+.git
+.gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# Flutter
+build/
+.dart_tool/
+android/
+ios/
+macos/
+windows/
+linux/
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+.cache/
