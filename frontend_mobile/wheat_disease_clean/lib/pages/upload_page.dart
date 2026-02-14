@@ -63,7 +63,7 @@ class _UploadPageState extends State<UploadPage> {
       Map<String, dynamic> result;
 
       if (isOnline) {
-        print("🌐 Online → using backend ONNX");
+        print(" Online → using backend ONNX");
 
         final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,

@@ -38,14 +38,14 @@ services:
       - "8000:8000"
 
     env_file:
-      - .env
+      - backend/.env
+
 
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
 
     volumes:
-      - ./app:/app/app
-      - ./uploads:/app/uploads
+      - ./backend/uploads:/app/uploads
 
     restart: always
     networks:
