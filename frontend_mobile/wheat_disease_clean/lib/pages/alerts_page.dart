@@ -6,6 +6,7 @@ import 'package:geocoding/geocoding.dart';
 import '../services/api_service.dart';
 import '../utils/disease_names.dart';
 import 'map_page.dart';
+import '../config.dart';
 
 class AlertsPage extends StatefulWidget {
   const AlertsPage({super.key});
@@ -48,7 +49,9 @@ class _AlertsPageState extends State<AlertsPage> {
         final city = p.locality?.trim() ?? "";
         final state = p.administrativeArea?.trim() ?? "";
 
-        final readable = city.isNotEmpty ? "$city, $state" : (state.isNotEmpty ? state : "Unknown");
+        final readable = city.isNotEmpty
+            ? "$city, $state"
+            : (state.isNotEmpty ? state : "Unknown");
         _locationCache[key] = readable;
         return readable;
       }
@@ -68,7 +71,6 @@ class _AlertsPageState extends State<AlertsPage> {
 
       setState(() => alerts = list);
 
-      
       final box = Hive.box("alert_history");
 
       for (var a in list) {
@@ -80,33 +82,31 @@ class _AlertsPageState extends State<AlertsPage> {
     } catch (e) {
       debugPrint("Alert load error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr("alerts_load_error"))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr("alerts_load_error"))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  
   void _initSocket() {
-  socket = IO.io(
-    "http://10.0.2.2:8000",
-    IO.OptionBuilder()
-        .setTransports(['websocket'])
-        .disableAutoConnect()
-        .build(),
-  );
+    socket = IO.io(
+      AppConfig.baseUrl,
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .disableAutoConnect()
+          .build(),
+    );
 
-  socket!.onConnect((_) => debugPrint("Alerts socket connected"));
-  socket!.onDisconnect((_) => debugPrint("Alerts socket disconnected"));
+    socket!.onConnect((_) => debugPrint("Alerts socket connected"));
+    socket!.onDisconnect((_) => debugPrint("Alerts socket disconnected"));
 
-  socket!.on("new_alert", (data) => _handleRealtimeAlert(data));
+    socket!.on("new_alert", (data) => _handleRealtimeAlert(data));
 
-  socket!.connect();
-}
-
+    socket!.connect();
+  }
 
   void _handleRealtimeAlert(dynamic a) {
     final alert = {
@@ -121,9 +121,10 @@ class _AlertsPageState extends State<AlertsPage> {
 
     setState(() => alerts.insert(0, alert));
 
-   
     final box = Hive.box("alert_history");
-    final exists = box.values.any((m) => (m["id"]?.toString() ?? "") == alert["id"]);
+    final exists = box.values.any(
+      (m) => (m["id"]?.toString() ?? "") == alert["id"],
+    );
     if (!exists) box.add(alert);
   }
 
@@ -171,104 +172,128 @@ class _AlertsPageState extends State<AlertsPage> {
         title: Text(tr("alerts_title")),
         backgroundColor: Colors.orange,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: fetchAlerts,
-          )
+          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchAlerts),
         ],
       ),
 
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : alerts.isEmpty
-              ? Center(child: Text(tr("alerts_empty"), style: const TextStyle(fontSize: 16)))
-              : ListView.builder(
-                  itemCount: alerts.length,
-                  itemBuilder: (context, index) {
-                    final alert = alerts[index];
+          ? Center(
+              child: Text(
+                tr("alerts_empty"),
+                style: const TextStyle(fontSize: 16),
+              ),
+            )
+          : ListView.builder(
+              itemCount: alerts.length,
+              itemBuilder: (context, index) {
+                final alert = alerts[index];
 
-                    final diseaseRaw = alert["disease"] ?? "Unknown";
-                    final disease = DiseaseNames.get(diseaseRaw, lang);
+                final diseaseRaw = alert["disease"] ?? "Unknown";
+                final disease = DiseaseNames.get(diseaseRaw, lang);
 
-                    final severity = alert["severity"] ?? "N/A";
-                    final cases = alert["cases"]?.toString() ?? "?";
-                    final lat = (alert["lat"] ?? 0).toDouble();
-                    final lon = (alert["lon"] ?? 0).toDouble();
+                final severity = alert["severity"] ?? "N/A";
+                final cases = alert["cases"]?.toString() ?? "?";
+                final lat = (alert["lat"] ?? 0).toDouble();
+                final lon = (alert["lon"] ?? 0).toDouble();
 
-                    final color = _severityColor(severity);
+                final color = _severityColor(severity);
 
-                    return FutureBuilder<String>(
-                      future: _getReadableLocation(lat, lon),
-                      builder: (context, snap) {
-                        final location = snap.data ?? "Unknown";
+                return FutureBuilder<String>(
+                  future: _getReadableLocation(lat, lon),
+                  builder: (context, snap) {
+                    final location = snap.data ?? "Unknown";
 
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 3,
-                          child: ListTile(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => MapPage(
-                                    alertLat: lat,
-                                    alertLon: lon,
-                                    alertRadiusKm: 5,
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 3,
+                      child: ListTile(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MapPage(
+                                alertLat: lat,
+                                alertLon: lon,
+                                alertRadiusKm: 5,
+                              ),
+                            ),
+                          );
+                        },
+
+                        leading: CircleAvatar(
+                          backgroundColor: color.withOpacity(0.15),
+                          child: Icon(
+                            Icons.warning_amber_rounded,
+                            color: color,
+                          ),
+                        ),
+
+                        title: Text(
+                          disease,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+
+                            Row(
+                              children: [
+                                Chip(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 0,
+                                  ),
+                                  backgroundColor: color.withOpacity(0.15),
+                                  label: Text(
+                                    severity,
+                                    style: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
-                              );
-                            },
-
-                            leading: CircleAvatar(
-                              backgroundColor: color.withOpacity(0.15),
-                              child: Icon(Icons.warning_amber_rounded, color: color),
-                            ),
-
-                            title: Text(
-                              disease,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 4),
-
-                                Row(
-                                  children: [
-                                    Chip(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-                                      backgroundColor: color.withOpacity(0.15),
-                                      label: Text(
-                                        severity,
-                                        style: TextStyle(
-                                          color: color,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text("${tr('alerts_cases')}: $cases", style: const TextStyle(fontSize: 12)),
-                                  ],
-                                ),
-
-                                Text("📍 ${tr('alerts_location')}: $location",
-                                    style: const TextStyle(fontSize: 12)),
-
+                                const SizedBox(width: 10),
                                 Text(
-                                  "${tr('alerts_time')}: ${_formatTime(alert["timestamp"] ?? alert["created_at"])}",
-                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                  "${tr('alerts_cases')}: $cases",
+                                  style: const TextStyle(fontSize: 12),
                                 ),
                               ],
                             ),
-                          ),
-                        );
-                      },
+
+                            Text(
+                              "📍 ${tr('alerts_location')}: $location",
+                              style: const TextStyle(fontSize: 12),
+                            ),
+
+                            Text(
+                              "${tr('alerts_time')}: ${_formatTime(alert["timestamp"] ?? alert["created_at"])}",
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   },
-                ),
+                );
+              },
+            ),
     );
   }
 }
