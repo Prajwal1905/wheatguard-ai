@@ -2,14 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
+import '../config.dart';
 
 class ApiService {
-  
   //static const String baseUrl = "http://10.239.104.35:8000";
   //static String baseUrl = "http://127.0.0.1:8000";
-  static const String baseUrl = "http://172.31.107.35:8000";
+  // static const String baseUrl = "http://172.31.107.35:8000";
 
-  
+  static const String baseUrl = AppConfig.baseUrl;
   static Future<Map<String, dynamic>> predictDisease(
     File imageFile,
     String language,
@@ -25,10 +25,9 @@ class ApiService {
     request.fields['lat'] = lat.toString();
     request.fields['lon'] = lon.toString();
 
-    request.files.add(await http.MultipartFile.fromPath(
-      'file',
-      imageFile.path,
-    ));
+    request.files.add(
+      await http.MultipartFile.fromPath('file', imageFile.path),
+    );
 
     var response = await request.send();
 
@@ -157,9 +156,7 @@ class ApiService {
   }
 
   static Future<void> deleteDetection(int reportId) async {
-    final res = await http.delete(
-      Uri.parse("$baseUrl/detections/$reportId"),
-    );
+    final res = await http.delete(Uri.parse("$baseUrl/detections/$reportId"));
 
     if (res.statusCode != 200) {
       throw Exception("Failed to delete: ${res.statusCode}");
@@ -194,4 +191,3 @@ class ApiService {
     return res.statusCode == 200;
   }
 }
-
