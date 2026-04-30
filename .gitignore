@@ -35,6 +35,8 @@ frontend_mobile/wheat_disease_clean/ios/Pods/
 ############################
 frontend-web/node_modules/
 frontend-web/dist/
+frontend-web/.env
+frontend-web/.env.*
 
 ############################
 # Models (VERY IMPORTANT)
