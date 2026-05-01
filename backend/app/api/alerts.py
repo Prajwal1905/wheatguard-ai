@@ -35,7 +35,7 @@ async def create_alert(alert: schemas.AlertCreate, db: Session = Depends(get_db)
     })
 
     
-    users = db.query(FCMToken).all()
+    users = db.query(FCMDevice).all()
 
     for user in users:
         if user.lat is None or user.lon is None:
