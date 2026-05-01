@@ -32,9 +32,9 @@ async def analyze_drone_image(
 
     detection_data = {
         "report_id": None,
-        "disease_label": result["label"],
-        "confidence": result["confidence"],
-        "severity": result["severity"],
+        "disease_label": result["exact_disease"],
+        "confidence": result.get("confidence", 0),
+        "severity": "High" if result.get("confidence", 0) >= 85 else "Moderate" if result.get("confidence", 0) >= 60 else "Low",
         "bbox": result.get("bbox"),
         "model_version": "v1.0"
     }
