@@ -59,7 +59,7 @@ class AlertResponse(AlertBase):
     resolved_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class FCMTokenBase(BaseModel):
     device_id: str
