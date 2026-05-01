@@ -14,11 +14,9 @@ import NdviTrendGraph from "./NdviTrendGraph";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
-
 delete L.Icon.Default.prototype._getIconUrl;
 L.IconDefault = L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9/dist/images/marker-icon-2x.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9/dist/images/marker-shadow.png",
 });
@@ -47,7 +45,7 @@ const greenIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
-function parseLatLon(input, isLat = true) {
+function parseLatLon(input, _isLat = true) {
   if (!input) return null;
   input = input.trim().toUpperCase().replace(/\s+/g, "");
 
@@ -73,7 +71,6 @@ function parseLatLon(input, isLat = true) {
   return null;
 }
 
-
 function ClickNDVI({ setClicked }) {
   useMapEvents({
     click: async (e) => {
@@ -82,7 +79,7 @@ function ClickNDVI({ setClicked }) {
 
       try {
         const res = await fetch(
-          `${API_BASE}/api/sentinel_ndvi_value?lat=${lat}&lon=${lng}`
+          `${API_BASE}/api/sentinel_ndvi_value?lat=${lat}&lon=${lng}`,
         );
         const data = await res.json();
 
@@ -157,7 +154,6 @@ export default function MapView({ detections = [] }) {
     loadFields();
   }, []);
 
-  
   const handleSearch = () => {
     const lat = parseLatLon(latInput, true);
     const lon = parseLatLon(lonInput, false);
@@ -172,7 +168,6 @@ export default function MapView({ detections = [] }) {
 
   return (
     <div style={{ height: "75vh", width: "100%", position: "relative" }}>
-      
       <div
         style={{
           position: "absolute",
@@ -229,7 +224,6 @@ export default function MapView({ detections = [] }) {
         </button>
       </div>
 
-      
       <div
         style={{
           position: "absolute",
@@ -255,11 +249,9 @@ export default function MapView({ detections = [] }) {
         </button>
       </div>
 
-      
       <MapContainer center={[20.5, 78.5]} zoom={6} style={{ height: "100%" }}>
         <FlyToLocation center={forceCenter} />
 
-        
         <TileLayer
           url={
             satellite
@@ -268,7 +260,6 @@ export default function MapView({ detections = [] }) {
           }
         />
 
-        
         {ndviOn && (
           <TileLayer
             url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_NDVI/default/2024-01-01/GoogleMapsCompatible/{z}/{y}/{x}.png"
@@ -276,7 +267,6 @@ export default function MapView({ detections = [] }) {
           />
         )}
 
-        
         {heatmap && (
           <HeatLayer
             points={detections.map((d) => [
@@ -289,7 +279,6 @@ export default function MapView({ detections = [] }) {
 
         <ClickNDVI setClicked={setClicked} />
 
-        
         {fields.map((f) => {
           if (!f.polygon) return null;
 
@@ -312,7 +301,6 @@ export default function MapView({ detections = [] }) {
                   <b>Crop:</b> {f.crop} <br />
                   <b>Phone:</b> {f.phone} <br />
                   <b>Farmer ID:</b> {f.farmer_id} <br />
-
                   {f.photo_url && (
                     <>
                       <br />
@@ -322,7 +310,6 @@ export default function MapView({ detections = [] }) {
                       />
                     </>
                   )}
-
                   {f.field_photo_url && (
                     <>
                       <br />
@@ -342,7 +329,6 @@ export default function MapView({ detections = [] }) {
           );
         })}
 
-        
         {detections.map((d, idx) => (
           <Marker
             key={idx}
@@ -351,8 +337,8 @@ export default function MapView({ detections = [] }) {
               d.severity === "High"
                 ? redIcon
                 : d.severity === "Medium"
-                ? orangeIcon
-                : greenIcon
+                  ? orangeIcon
+                  : greenIcon
             }
           >
             <Popup>
@@ -364,7 +350,6 @@ export default function MapView({ detections = [] }) {
           </Marker>
         ))}
 
-        
         {clicked && clicked.status === "ok" && (
           <Marker position={[clicked.lat, clicked.lon]}>
             <Popup>
