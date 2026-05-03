@@ -32,12 +32,15 @@ def get_detections(db: Session):
 
 
 def create_alert(db: Session, data):
-    alert = Alert(**data)
+    if hasattr(data, '__dict__'):
+        alert = Alert(**data.dict())
+    else:
+        alert = Alert(**data)
     db.add(alert)
     db.commit()
     db.refresh(alert)
     return alert
-
+    
 def get_alerts(db: Session):
     return db.query(Alert).order_by(Alert.created_at.desc()).all()
 
