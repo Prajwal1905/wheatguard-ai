@@ -5,7 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 class DrawPolygonPage extends StatefulWidget {
-  final List<LatLng>? points;   // Accept old polygon points
+  final List<LatLng>? points; // Accept old polygon points
 
   const DrawPolygonPage({super.key, this.points});
 
@@ -37,11 +37,8 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, points),
-            child: const Text(
-              "Save",
-              style: TextStyle(color: Colors.white),
-            ),
-          )
+            child: const Text("Save", style: TextStyle(color: Colors.white)),
+          ),
         ],
       ),
 
@@ -57,13 +54,18 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
             setState(() => points.add(latlng));
           },
 
-          interactionOptions:
-              const InteractionOptions(flags: InteractiveFlag.all),
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all,
+          ),
         ),
 
         children: [
           TileLayer(
             urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            userAgentPackageName: 'com.example.wheat_disease_clean',
+            additionalOptions: const {
+              'User-Agent': 'WheatGuardAI Student Project (Flutter)',
+            },
           ),
 
           // Draw polygon if at least 3 points
@@ -75,7 +77,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                   color: Colors.green.withOpacity(0.3),
                   borderStrokeWidth: 3,
                   borderColor: Colors.green,
-                )
+                ),
               ],
             ),
 
@@ -95,7 +97,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
                   ),
                 )
                 .toList(),
-          )
+          ),
         ],
       ),
 
@@ -121,8 +123,7 @@ class _DrawPolygonPageState extends State<DrawPolygonPage> {
               onPressed: () => setState(() => points.clear()),
               icon: const Icon(Icons.delete),
               label: const Text("Clear"),
-              style:
-                  ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             ),
           ],
         ),
