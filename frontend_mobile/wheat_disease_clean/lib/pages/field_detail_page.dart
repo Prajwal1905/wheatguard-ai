@@ -10,37 +10,36 @@ import '../services/api_service.dart';
 
 class FieldDetailPage extends StatelessWidget {
   final Map<String, dynamic> field;
-
   const FieldDetailPage({super.key, required this.field});
 
-  // ---------------- POLYGON ----------------
+  static const _green = Color(0xFF2E7D32);
+  static const _darkGreen = Color(0xFF1B5E20);
+
   List<LatLng> _parsePolygon(dynamic poly) {
     if (poly == null) return [];
     try {
       final pts = poly as List<dynamic>;
       return pts
-          .map((p) => LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble()))
+          .map((p) => LatLng(
+              (p[0] as num).toDouble(), (p[1] as num).toDouble()))
           .toList();
     } catch (e) {
       return [];
     }
   }
 
-  // ---------------- AREA ----------------
   double _computeAreaSqM(List<LatLng> points) {
     if (points.length < 3) return 0;
-
     const double R = 6371000;
     double lat0 =
-        points.map((p) => p.latitude).reduce((a, b) => a + b) / points.length;
+        points.map((p) => p.latitude).reduce((a, b) => a + b) /
+            points.length;
     lat0 = lat0 * pi / 180;
-
     List<Offset> mpts = points.map((p) {
       double x = R * p.longitude * pi / 180 * cos(lat0);
       double y = R * p.latitude * pi / 180;
       return Offset(x, y);
     }).toList();
-
     double sum = 0;
     for (int i = 0; i < mpts.length; i++) {
       final p1 = mpts[i];
@@ -50,118 +49,130 @@ class FieldDetailPage extends StatelessWidget {
     return (sum.abs() / 2.0);
   }
 
-  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     final polygon = _parsePolygon(field["polygon"]);
-
     final farmerPhotoUrl = field["photo_url"] != null
         ? "${ApiService.baseUrl}${field["photo_url"]}"
         : null;
-
     final fieldPhotoUrl = field["field_photo_url"] != null
         ? "${ApiService.baseUrl}${field["field_photo_url"]}"
         : null;
-
     final lat = (field["geo_lat"] as num?)?.toDouble();
     final lon = (field["geo_lon"] as num?)?.toDouble();
-
-    final areaSqM = polygon.isEmpty ? 0 : _computeAreaSqM(polygon);
+    final areaSqM =
+        polygon.isEmpty ? 0.0 : _computeAreaSqM(polygon);
     final areaHectares = areaSqM / 10000;
     final areaAcres = areaSqM / 4046.85642;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F8E9),
       appBar: AppBar(
-        title: Text("${'edit_field'.tr()} #${field["id"] ?? ""}"),
-        backgroundColor: Colors.green.shade700,
+        backgroundColor: _green,
+        title: Text(
+          "Field #${field["id"] ?? ""}",
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => FieldEditPage(field: field)),
-              );
-            },
+            icon: const Icon(Icons.edit, color: Colors.white),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => FieldEditPage(field: field)),
+            ),
           ),
         ],
       ),
-
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
 
-          // PHOTOS
+          // Photos
           Row(
             children: [
               Expanded(
-                child: _ImageCard(
+                child: _photoCard(
                   title: 'farmer_photo'.tr(),
                   url: farmerPhotoUrl,
-                  icon: Icons.person,
+                  icon: Icons.person_outline,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _ImageCard(
+                child: _photoCard(
                   title: 'field_photo'.tr(),
                   url: fieldPhotoUrl,
-                  icon: Icons.landscape,
+                  icon: Icons.landscape_outlined,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
 
-          // INFO CARD
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _info('village'.tr(), field["village"]),
-                  _info('phone'.tr(), field["phone"]),
-                  _info('crop'.tr(), field["crop"]),
-                  _info("ID", "${field["farmer_id"]}"),
-                  if (lat != null && lon != null)
-                    _info("GPS", "Lat: $lat, Lon: $lon"),
-                ],
-              ),
+          // Info Card
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _cardTitle("Farm Information"),
+                const SizedBox(height: 10),
+                _infoRow(Icons.location_city, 'village'.tr(),
+                    field["village"]),
+                _infoRow(Icons.phone, 'phone'.tr(), field["phone"]),
+                _infoRow(Icons.grass, 'crop'.tr(), field["crop"]),
+                _infoRow(Icons.badge, "Farmer ID",
+                    "${field["farmer_id"]}"),
+                if (lat != null && lon != null)
+                  _infoRow(Icons.gps_fixed, "GPS",
+                      "Lat: ${lat.toStringAsFixed(4)}, Lon: ${lon.toStringAsFixed(4)}"),
+              ],
             ),
           ),
 
-          const SizedBox(height: 15),
+          const SizedBox(height: 12),
 
-          // AREA CARD
+          // Area Card
           if (polygon.isNotEmpty)
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('field_area'.tr(),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text("${'sq_meters'.tr()}: ${areaSqM.toStringAsFixed(2)}"),
-                    Text("${'hectares'.tr()}: ${areaHectares.toStringAsFixed(4)}"),
-                    Text("${'acres'.tr()}: ${areaAcres.toStringAsFixed(4)}"),
-                  ],
-                ),
+            _card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _cardTitle('field_area'.tr()),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                          child: _areaChip(
+                              "Sq. Meters",
+                              areaSqM.toStringAsFixed(0))),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: _areaChip(
+                              "Hectares",
+                              areaHectares.toStringAsFixed(4))),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: _areaChip(
+                              "Acres",
+                              areaAcres.toStringAsFixed(4))),
+                    ],
+                  ),
+                ],
               ),
             ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // MAP BUTTON
+          // View Map Button
           if (polygon.isNotEmpty && lat != null && lon != null)
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
+            SizedBox(
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => FieldMapPage(
@@ -170,36 +181,126 @@ class FieldDetailPage extends StatelessWidget {
                       fieldId: field["id"] ?? 0,
                     ),
                   ),
-                );
-              },
-              icon: const Icon(Icons.map),
-              label: Text('view_field_map'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                minimumSize: const Size(double.infinity, 50),
+                ),
+                icon: const Icon(Icons.map_outlined),
+                label: Text('view_field_map'.tr()),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
 
-          // DELETE BUTTON
-          ElevatedButton.icon(
-            onPressed: () async {
-              final url = Uri.parse("${ApiService.baseUrl}/fields/${field["id"]}");
-              final res = await http.delete(url);
-
-              if (res.statusCode == 200) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('field_deleted'.tr())),
+          // Delete Button
+          SizedBox(
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    title: const Text("Delete Field"),
+                    content: const Text(
+                        "Are you sure you want to delete this field?"),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.pop(context, false),
+                        child: const Text("Cancel"),
+                      ),
+                      ElevatedButton(
+                        onPressed: () =>
+                            Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white),
+                        child: const Text("Delete"),
+                      ),
+                    ],
+                  ),
                 );
-                Navigator.pop(context, true);
-              }
-            },
-            icon: const Icon(Icons.delete),
-            label: Text('delete_field'.tr()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              minimumSize: const Size(double.infinity, 50),
+
+                if (confirm == true) {
+                  final url = Uri.parse(
+                      "${ApiService.baseUrl}/fields/${field["id"]}");
+                  final res = await http.delete(url);
+                  if (res.statusCode == 200) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('field_deleted'.tr())),
+                    );
+                    Navigator.pop(context, true);
+                  }
+                }
+              },
+              icon: const Icon(Icons.delete_outline),
+              label: Text('delete_field'.tr()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: child,
+    );
+  }
+
+  Widget _cardTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        color: _darkGreen,
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Text(
+            "$label: ",
+            style: const TextStyle(
+                fontSize: 13, color: Colors.grey),
+          ),
+          Expanded(
+            child: Text(
+              value ?? "-",
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -207,41 +308,63 @@ class FieldDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _info(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
+  Widget _areaChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F8E9),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
         children: [
-          Text("$label: ", style: const TextStyle(fontWeight: FontWeight.bold)),
-          Expanded(child: Text(value ?? "-")),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: _darkGreen,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
   }
-}
 
-// IMAGE CARD
-class _ImageCard extends StatelessWidget {
-  final String title;
-  final String? url;
-  final IconData icon;
-
-  const _ImageCard({required this.title, required this.url, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _photoCard({
+    required String title,
+    required String? url,
+    required IconData icon,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
-        const SizedBox(height: 5),
-        AspectRatio(
-          aspectRatio: 4 / 3,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
             child: url == null
-                ? Container(color: Colors.grey.shade200, child: Icon(icon, size: 40))
-                : Image.network(url!, fit: BoxFit.cover),
+                ? Container(
+                    color: Colors.grey.shade100,
+                    child: Icon(icon,
+                        size: 40, color: Colors.grey.shade400),
+                  )
+                : Image.network(url, fit: BoxFit.cover),
           ),
         ),
       ],
