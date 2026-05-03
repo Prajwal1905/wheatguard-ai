@@ -18,7 +18,7 @@ class ReportResponse(ReportBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 
@@ -38,7 +38,7 @@ class DetectionResponse(DetectionBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class AlertBase(BaseModel):
@@ -70,7 +70,7 @@ class FCMTokenBase(BaseModel):
 class FCMTokenResponse(FCMTokenBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class FieldBase(BaseModel):
     farmer_id: int
@@ -92,4 +92,4 @@ class FieldResponse(FieldBase):
     created_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
