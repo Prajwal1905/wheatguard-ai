@@ -17,20 +17,20 @@ class _FieldListPageState extends State<FieldListPage> {
   List<dynamic> fields = [];
   bool loading = true;
 
+  static const _green = Color(0xFF2E7D32);
+  static const _darkGreen = Color(0xFF1B5E20);
+
   @override
   void initState() {
     super.initState();
     fetchFields();
   }
 
-  // ---------------- FETCH FIELDS ----------------
   Future<void> fetchFields() async {
     try {
       final url = Uri.parse("${ApiService.baseUrl}/fields/");
       final response = await http.get(url);
-
       if (!mounted) return;
-
       if (response.statusCode == 200) {
         setState(() {
           fields = jsonDecode(response.body);
@@ -45,98 +45,188 @@ class _FieldListPageState extends State<FieldListPage> {
     }
   }
 
-  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F8E9),
       appBar: AppBar(
-        title: Text('registered_fields'.tr()),
-        backgroundColor: Colors.green.shade700,
+        backgroundColor: _green,
+        title: Text(
+          'registered_fields'.tr(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: () {
+              setState(() => loading = true);
+              fetchFields();
+            },
+          ),
+        ],
       ),
-
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : fields.isEmpty
-              ? Center(child: Text('no_fields'.tr()))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.agriculture_outlined,
+                        size: 72,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'no_fields'.tr(),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: fetchFields,
                   child: ListView.builder(
+                    padding: const EdgeInsets.all(12),
                     itemCount: fields.length,
                     itemBuilder: (context, i) {
                       final f = fields[i];
-
                       final farmerPhotoUrl = f["photo_url"] != null
                           ? "${ApiService.baseUrl}${f["photo_url"]}"
                           : null;
 
-                      final fieldPhotoUrl = f["field_photo_url"] != null
-                          ? "${ApiService.baseUrl}${f["field_photo_url"]}"
-                          : null;
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        elevation: 3,
-                        child: ListTile(
-                          leading: SizedBox(
-                            width: 60,
-                            height: 60,
-                            child: Stack(
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FieldDetailPage(field: f),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
                               children: [
-                                Positioned.fill(
-                                  child: farmerPhotoUrl == null
-                                      ? const Icon(Icons.person, size: 40)
-                                      : ClipRRect(
-                                          borderRadius: BorderRadius.circular(8),
-                                          child: Image.network(
-                                            farmerPhotoUrl,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                const Icon(Icons.broken_image),
-                                          ),
-                                        ),
+                                // Farmer photo
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: farmerPhotoUrl != null
+                                      ? Image.network(
+                                          farmerPhotoUrl,
+                                          width: 60,
+                                          height: 60,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              _placeholderIcon(),
+                                        )
+                                      : _placeholderIcon(),
                                 ),
-                                if (fieldPhotoUrl != null)
-                                  Positioned(
-                                    right: 0,
-                                    bottom: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(6),
+
+                                const SizedBox(width: 14),
+
+                                // Info
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        f["village"] ?? 'Unknown',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: _darkGreen,
+                                        ),
                                       ),
-                                      child: const Icon(Icons.landscape, size: 16, color: Colors.white),
-                                    ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.grass,
+                                            size: 14,
+                                            color: Colors.green,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            f["crop"] ?? '-',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.phone_outlined,
+                                            size: 14,
+                                            color: Colors.grey,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            f["phone"] ?? '-',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
+                                ),
+
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: Colors.grey,
+                                ),
                               ],
                             ),
                           ),
-
-                          title: Text(
-                            "${f["village"] ?? 'unknown'.tr()} — ${f["crop"] ?? ''}",
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                          ),
-
-                          subtitle: Text("${'phone'.tr()}: ${f["phone"] ?? "-"}"),
-
-                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => FieldDetailPage(field: f),
-                              ),
-                            );
-                          },
                         ),
                       );
                     },
                   ),
                 ),
+    );
+  }
+
+  Widget _placeholderIcon() {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(
+        Icons.person_outline,
+        color: Colors.green.shade300,
+        size: 32,
+      ),
     );
   }
 }
