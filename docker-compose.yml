@@ -24,6 +24,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: wheatguard-api
+    dns:
+    - 8.8.8.8
+    - 8.8.4.4
     depends_on:
       db:
         condition: service_healthy
