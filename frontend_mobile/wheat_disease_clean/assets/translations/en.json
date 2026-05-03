@@ -81,8 +81,17 @@
   "save_changes": "Save Changes",
   "update_success": "Field updated successfully",
   "update_failed": "Update failed",
-  "location_missing": "Location missing"
-
+  "location_missing": "Location missing",
+  "Disease Result": "Disease Result",
+  "Organic Mode": "Organic Mode",
+  "Chemicals Mentioned": "Chemicals Mentioned",
+  "AI Explanation": "AI Explanation",
+  "Ask your question…": "Ask your question…",
+  "Ask Doubts to AI": "Ask Doubts to AI",
+  "Upload Another Image": "Upload Another Image",
+  "search_disease": "Search disease...",
+  "no_alerts_found": "No alerts found"
+  
 
 
 

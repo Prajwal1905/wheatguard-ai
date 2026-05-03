@@ -82,7 +82,17 @@
   "save_changes": "परिवर्तन सहेजें",
   "update_success": "खेत सफलतापूर्वक अपडेट हुआ",
   "update_failed": "अपडेट विफल",
-  "location_missing": "लोकेशन उपलब्ध नहीं"
+  "location_missing": "लोकेशन उपलब्ध नहीं",
+  "Disease Result": "रोग परिणाम",
+  "Organic Mode": "जैविक मोड",
+  "Chemicals Mentioned": "उल्लेखित रसायन",
+  "AI Explanation": "AI स्पष्टीकरण",
+  "Ask your question…": "अपना प्रश्न पूछें…",
+  "Ask Doubts to AI": "AI से सवाल पूछें",
+  "Upload Another Image": "दूसरी तस्वीर अपलोड करें",
+  "search_disease": "रोग खोजें...",
+  "no_alerts_found": "कोई अलर्ट नहीं मिला"
+  
 
 
   

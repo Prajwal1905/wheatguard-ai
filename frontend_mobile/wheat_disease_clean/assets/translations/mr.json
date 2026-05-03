@@ -82,7 +82,17 @@
   "save_changes": "बदल जतन करा",
   "update_success": "शेत यशस्वीरित्या अपडेट झाले",
   "update_failed": "अपडेट अयशस्वी",
-  "location_missing": "स्थान उपलब्ध नाही"
+  "location_missing": "स्थान उपलब्ध नाही",
+  "Disease Result": "रोग निकाल",
+  "Organic Mode": "सेंद्रिय मोड",
+  "Chemicals Mentioned": "उल्लेखित रसायने",
+  "AI Explanation": "AI स्पष्टीकरण",
+  "Ask your question…": "तुमचा प्रश्न विचारा…",
+  "Ask Doubts to AI": "AI ला शंका विचारा",
+  "Upload Another Image": "दुसरी प्रतिमा अपलोड करा",
+  "search_disease": "रोग शोधा...",
+  "no_alerts_found": "कोणतेही अलर्ट आढळले नाहीत"
+  
 
 
 
