@@ -1,10 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-
 import 'package:easy_localization/easy_localization.dart';
-import 'package:pdf/widgets.dart' as pw ;
-
+import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
@@ -21,6 +19,9 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   final Box box = Hive.box('predictions');
+
+  static const _green = Color(0xFF2E7D32);
+  static const _darkGreen = Color(0xFF1B5E20);
 
   @override
   void initState() {
@@ -52,22 +53,34 @@ class _HistoryPageState extends State<HistoryPage> {
     final predictions = getFilteredPredictions();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F8E9),
       appBar: AppBar(
-        title: Text(tr('history')),
-        backgroundColor: Colors.green,
+        backgroundColor: _green,
+        title: Text(
+          tr('history'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           if (predictions.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_forever, color: Colors.white),
               onPressed: _confirmDeleteAll,
+              tooltip: "Delete All",
             ),
         ],
       ),
 
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.orange,
-        icon: const Icon(Icons.picture_as_pdf),
-        label: const Text('Export PDF'),
+        backgroundColor: Colors.orange.shade700,
+        icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+        label: const Text(
+          'Export PDF',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         onPressed: () {
           if (predictions.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -81,107 +94,215 @@ class _HistoryPageState extends State<HistoryPage> {
 
       body: predictions.isEmpty
           ? Center(
-              child: Text(
-                tr('no_history'),
-                style: const TextStyle(fontSize: 18, color: Colors.grey),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.history_outlined,
+                    size: 72,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    tr('no_history'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
               ),
             )
           : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
               itemCount: predictions.length,
               itemBuilder: (context, index) {
                 final item = predictions[index];
-                final imgFile = File(item['imagePath']);
+                final imgFile = File(item['imagePath'] ?? '');
                 final imageExists = imgFile.existsSync();
+                final isSynced = item['synced'] == true;
+                final confidence = item['confidence']?.toString() ?? '0';
+                final disease =
+                    item['disease']?.toString().toUpperCase() ?? 'UNKNOWN';
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  elevation: 4,
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: Padding(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        
+
+                        // Image
                         GestureDetector(
-                          onTap: imageExists ? () => _openImagePreview(imgFile) : null,
+                          onTap: imageExists
+                              ? () => _openImagePreview(imgFile)
+                              : null,
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(10),
                             child: imageExists
-                                ? Image.file(imgFile,
-                                    width: 70, height: 70, fit: BoxFit.cover)
-                                : const Icon(Icons.broken_image,
-                                    size: 70, color: Colors.grey),
+                                ? Image.file(
+                                    imgFile,
+                                    width: 75,
+                                    height: 75,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    width: 75,
+                                    height: 75,
+                                    color: Colors.grey.shade100,
+                                    child: Icon(
+                                      Icons.image_not_supported_outlined,
+                                      color: Colors.grey.shade400,
+                                      size: 32,
+                                    ),
+                                  ),
                           ),
                         ),
 
                         const SizedBox(width: 12),
 
+                        // Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                item['disease'].toString().toUpperCase(),
+                                disease,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 16),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: _darkGreen,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+
+                              // Confidence bar
+                              Row(
+                                children: [
+                                  Text(
+                                    "${tr('confidence')}: ",
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  Text(
+                                    "$confidence%",
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
 
                               const SizedBox(height: 4),
-                              Text("${tr('confidence')}: ${item['confidence']}%"),
-                              Text("${tr('remedy')}: ${item['remedy']}"),
-                              Text("🕒 ${item['timestamp']}"),
 
-                              if (!(item['synced'] == true))
-                                const Text("Not Synced",
-                                    style: TextStyle(
-                                        color: Colors.red, fontSize: 12)),
+                              Text(
+                                "🕒 ${item['timestamp']}",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+
+                              const SizedBox(height: 6),
+
+                              // Sync status badge
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSynced
+                                      ? Colors.green.shade50
+                                      : Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: isSynced
+                                        ? Colors.green.shade200
+                                        : Colors.red.shade200,
+                                  ),
+                                ),
+                                child: Text(
+                                  isSynced ? "Synced" : "Not Synced",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isSynced
+                                        ? Colors.green.shade700
+                                        : Colors.red.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
 
-                        
+                        // Action buttons
                         Column(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.cloud_upload,
-                                  color: Colors.blue),
+                              icon: const Icon(
+                                Icons.cloud_upload_outlined,
+                                color: Colors.blue,
+                                size: 22,
+                              ),
                               onPressed: () => _syncToBackend(item),
+                              tooltip: "Sync",
                             ),
                             IconButton(
-  icon: const Icon(Icons.delete, color: Colors.red),
-  onPressed: () async {
-    try {
-      final reportId = item["report_id"] ?? 0;
-
-      if (reportId != 0) {
-        await ApiService.deleteDetection(reportId);  
-      }
-
-      
-      final key = box.keys.firstWhere(
-        (k) => box.get(k)['timestamp'] == item['timestamp'],
-        orElse: () => null,
-      );
-
-      if (key != null) {
-        box.delete(key);
-      }
-
-      setState(() {});
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Deleted Successfully")),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error deleting: $e")),
-      );
-    }
-  },
-),
-
+                              icon: Icon(
+                                Icons.delete_outline,
+                                color: Colors.red.shade400,
+                                size: 22,
+                              ),
+                              tooltip: "Delete",
+                              onPressed: () async {
+                                try {
+                                  final reportId = item["report_id"] ?? 0;
+                                  if (reportId != 0) {
+                                    await ApiService.deleteDetection(
+                                      reportId,
+                                    );
+                                  }
+                                  final key = box.keys.firstWhere(
+                                    (k) =>
+                                        box.get(k)['timestamp'] ==
+                                        item['timestamp'],
+                                    orElse: () => null,
+                                  );
+                                  if (key != null) box.delete(key);
+                                  setState(() {});
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Deleted Successfully"),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("Error: $e"),
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
                           ],
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -204,55 +325,72 @@ class _HistoryPageState extends State<HistoryPage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Delete All History"),
-        content: const Text("Are you sure you want to delete all items?"),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        title: const Text(
+          "Delete All History",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          "Are you sure you want to delete all detection history?",
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
             onPressed: () {
               box.clear();
               Navigator.pop(context);
               setState(() {});
             },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          )
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text("Delete All"),
+          ),
         ],
       ),
     );
   }
 
-  
   Future<void> _syncToBackend(Map item) async {
     final file = File(item["imagePath"]);
 
     if (!file.existsSync()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(" Image not found. Cannot sync.")),
+        const SnackBar(content: Text("Image not found. Cannot sync.")),
       );
       return;
     }
 
     if (item['lat'] == null || item['lon'] == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(" Missing location data.")),
+        const SnackBar(content: Text("Missing location data.")),
       );
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("⏳ Uploading image...")),
+      const SnackBar(content: Text("Uploading image...")),
     );
 
     final imageUrl = await ApiService.uploadImage(file);
     if (imageUrl == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("❌ Image upload failed!")),
+        const SnackBar(content: Text("Image upload failed!")),
       );
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("⏳ Syncing...")),
+      const SnackBar(content: Text("Syncing...")),
     );
 
     final ok = await ApiService.syncLocalDetection({
@@ -269,29 +407,33 @@ class _HistoryPageState extends State<HistoryPage> {
         (k) => box.get(k)['timestamp'] == item['timestamp'],
         orElse: () => null,
       );
-
       if (key != null) {
         final updated = Map.of(item);
         updated['synced'] = true;
         await box.put(key, updated);
       }
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(" Synced successfully!"), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text("Synced successfully!"),
+          backgroundColor: Colors.green,
+        ),
       );
-
       setState(() {});
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(" Sync failed"), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text("Sync failed"),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
 
-  /// PDF ==========================
   Future<void> _generateAndSharePDF(List<Map> predictions) async {
     final font = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/NotoSansDevanagari-Regular.ttf'),
+      await rootBundle.load(
+        'assets/fonts/NotoSansDevanagari-Regular.ttf',
+      ),
     );
 
     final pdf = pw.Document();
@@ -319,7 +461,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 p['disease'],
                 "${p['confidence']}%",
                 p['remedy'],
-                p['timestamp']
+                p['timestamp'],
               ];
             }).toList(),
             headerStyle: pw.TextStyle(
@@ -327,7 +469,9 @@ class _HistoryPageState extends State<HistoryPage> {
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.white,
             ),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.green600),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColors.green600,
+            ),
             cellStyle: pw.TextStyle(font: font, fontSize: 10),
             cellAlignment: pw.Alignment.centerLeft,
           ),
@@ -336,9 +480,14 @@ class _HistoryPageState extends State<HistoryPage> {
     );
 
     final dir = await getTemporaryDirectory();
-    final file = File("${dir.path}/Wheat_Report_${DateTime.now().millisecondsSinceEpoch}.pdf");
+    final file = File(
+      "${dir.path}/Wheat_Report_${DateTime.now().millisecondsSinceEpoch}.pdf",
+    );
     await file.writeAsBytes(await pdf.save());
 
-    await Share.shareXFiles([XFile(file.path)], text: "Wheat Disease Report");
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: "Wheat Disease Report",
+    );
   }
 }
