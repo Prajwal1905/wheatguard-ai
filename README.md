@@ -41,6 +41,16 @@ The system consists of three parts:
 
 ---
 
+## Demo Videos
+
+| Demo | Link |
+|---|---|
+| Mobile App Demo | [Watch Mobile App Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
+| Dashboard Demo | [Watch Dashboard Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
+
+
+---
+
 ## SIH 2025 Achievement
 
 This project was built for Smart India Hackathon 2024 and was selected among the
