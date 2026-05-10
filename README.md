@@ -514,5 +514,5 @@ Prajwal Khade
 ---
 
 This project was built to help Indian wheat farmers protect their crops using
-artificial intelligence, satellite technology, and real-time monitoring —
+artificial intelligence, satellite technology, and real-time monitoring 
 making advanced agricultural tools accessible to every farmer.
