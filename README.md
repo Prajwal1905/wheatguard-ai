@@ -53,7 +53,7 @@ The system consists of three parts:
 
 ## SIH 2025 Achievement
 
-This project was built for Smart India Hackathon 2024 and was selected among the
+This project was built for Smart India Hackathon 2025 and was selected among the
 Top 5 Projects Nationally in the agriculture and rural development category.
 
 The project addresses a real problem faced by wheat farmers in India — late detection
