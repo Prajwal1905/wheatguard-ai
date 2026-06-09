@@ -2,28 +2,19 @@ import React, { useEffect, useState } from "react";
 import DroneUpload from "../components/DroneUpload";
 import DronePreview from "../components/DronePreview";
 import DroneDetections from "../components/DroneDetections";
-import { analyzeDroneImage } from "../services/api"; 
+import { analyzeDroneImage } from "../services/api";
 
 export default function Drone() {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-
-  const [location, setLocation] = useState({
-    lat: "",
-    lon: "",
-  });
-
+  const [location, setLocation] = useState({ lat: "", lon: "" });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
   const [lastResult, setLastResult] = useState(null);
   const [history, setHistory] = useState([]);
 
-  
   useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null);
-      return;
-    }
+    if (!file) { setPreviewUrl(null); return; }
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
@@ -31,20 +22,16 @@ export default function Drone() {
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      setError("Geolocation not supported in this browser.");
+      setError("Geolocation is not supported in this browser.");
       return;
     }
     setError("");
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({
-          lat: pos.coords.latitude.toFixed(6),
-          lon: pos.coords.longitude.toFixed(6),
-        });
-      },
-      () => {
-        setError("Unable to fetch your location.");
-      }
+      (pos) => setLocation({
+        lat: pos.coords.latitude.toFixed(6),
+        lon: pos.coords.longitude.toFixed(6),
+      }),
+      () => setError("Unable to fetch your location.")
     );
   };
 
@@ -56,62 +43,48 @@ export default function Drone() {
   };
 
   const handleAnalyze = async () => {
-    if (!file) {
-      setError("Please select an image first.");
-      return;
-    }
-    if (!location.lat || !location.lon) {
-      setError("Please provide field location (lat & lon).");
-      return;
-    }
+    if (!file) { setError("Please select an image first."); return; }
+    if (!location.lat || !location.lon) { setError("Please provide field coordinates."); return; }
 
     setError("");
     setIsAnalyzing(true);
-
     try {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("lat", location.lat);
       formData.append("lon", location.lon);
-
       const data = await analyzeDroneImage(formData);
-
       setLastResult(data);
-      
-      if (data?.detection) {
-        setHistory((prev) => [data.detection, ...prev]);
-      }
+      if (data?.detection) setHistory((prev) => [data.detection, ...prev]);
     } catch (e) {
       console.error(e);
-      setError("Failed to analyze image. Please try again.");
+      setError("Analysis failed. Please try again.");
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 style={{color:"black"}}>
-          🛩 Drone Analysis
-        </h1>
-
-        <span style={{ color:"black"
-
-        }} >
-          Upload simulated drone images &amp; map detections
-        </span>
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div>
+          <h1 style={styles.title}>
+            <i className="ti ti-drone" style={styles.titleIcon} aria-hidden="true" />
+            Drone analysis
+          </h1>
+          <p style={styles.subtitle}>Upload field images to detect disease and map hotspots</p>
+        </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2 rounded-md">
+        <div style={styles.errorBox}>
+          <i className="ti ti-alert-circle" style={{ fontSize: 14 }} aria-hidden="true" />
           {error}
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        
-        <div className="lg:col-span-1">
+      <div style={styles.grid}>
+        <div>
           <DroneUpload
             file={file}
             setFile={setFile}
@@ -121,7 +94,7 @@ export default function Drone() {
           />
         </div>
 
-        <div className="lg:col-span-2 space-y-4">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <DronePreview
             file={file}
             previewUrl={previewUrl}
@@ -136,3 +109,52 @@ export default function Drone() {
     </div>
   );
 }
+
+const styles = {
+  page: {
+    padding: "24px 20px",
+    color: "#1a1a1a",
+  },
+  header: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 500,
+    color: "#1a1a1a",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    margin: 0,
+  },
+  titleIcon: {
+    fontSize: 20,
+    color: "#1B5E20",
+  },
+  subtitle: {
+    fontSize: 13,
+    color: "#888",
+    marginTop: 4,
+    marginLeft: 28,
+  },
+  errorBox: {
+    background: "#FCEBEB",
+    color: "#A32D2D",
+    border: "0.5px solid #F7C1C1",
+    borderRadius: 8,
+    padding: "9px 13px",
+    fontSize: 13,
+    marginBottom: 16,
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 2fr",
+    gap: 20,
+  },
+};
