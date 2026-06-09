@@ -9,77 +9,211 @@ export default function DronePreview({
   isAnalyzing,
 }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:p-5 flex flex-col md:flex-row gap-4 md:gap-6">
-      
-      <div className="w-full md:w-1/3">
-        <h2 className="text-sm font-semibold mb-2">Preview</h2>
-        <div className="border border-dashed border-gray-200 rounded-lg h-48 flex items-center justify-center bg-gray-50 overflow-hidden">
-          {previewUrl ? (
-            <img
-              src={previewUrl}
-              alt="Drone preview"
-              className="object-cover w-full h-full"
-            />
-          ) : (
-            <span className="text-xs text-gray-400 text-center px-4">
-              No image selected yet. Choose a drone snapshot on the left.
-            </span>
-          )}
-        </div>
-        {file && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="mt-2 text-xs text-red-500 hover:text-red-600"
-          >
-            ✖ Clear image
-          </button>
-        )}
+    <div style={styles.card}>
+      <div style={styles.header}>
+        <i className="ti ti-photo-scan" style={styles.headerIcon} aria-hidden="true" />
+        <div style={styles.headerTitle}>Image preview</div>
       </div>
 
-      <div className="flex-1 space-y-3">
-        <h2 className="text-sm font-semibold">Analysis Summary</h2>
-
-        <div className="grid grid-cols-2 gap-3 text-xs md:text-sm">
-          <div className="bg-gray-50 rounded-md px-3 py-2">
-            <div className="text-gray-500 text-[11px]">Latitude</div>
-            <div className="font-medium">
-              {location.lat || <span className="text-gray-400">Not set</span>}
+      <div style={styles.body}>
+        {/* Preview image */}
+        <div style={styles.previewBox}>
+          {previewUrl ? (
+            <img src={previewUrl} alt="Drone preview" style={styles.previewImg} />
+          ) : (
+            <div style={styles.previewEmpty}>
+              <i className="ti ti-photo-off" style={{ fontSize: 28, color: "#ccc", display: "block", marginBottom: 6 }} aria-hidden="true" />
+              <span style={styles.previewEmptyText}>No image selected</span>
             </div>
-          </div>
-          <div className="bg-gray-50 rounded-md px-3 py-2">
-            <div className="text-gray-500 text-[11px]">Longitude</div>
-            <div className="font-medium">
-              {location.lon || <span className="text-gray-400">Not set</span>}
-            </div>
-          </div>
+          )}
         </div>
 
-        <p className="text-[11px] text-gray-500">
-          The image and coordinates will be sent to the AI model. Detected
-          disease, severity and remedy will appear below and the detection will
-          also show up on the Live Map in real time.
-        </p>
+        {/* Meta */}
+        <div style={styles.meta}>
+          <div style={styles.metaGrid}>
+            <MetaField label="Latitude"  value={location.lat || "—"} icon="ti-map-pin" />
+            <MetaField label="Longitude" value={location.lon || "—"} icon="ti-map-pin" />
+            <MetaField label="File"      value={file ? file.name : "—"} icon="ti-file-image" />
+            <MetaField
+              label="Size"
+              value={file ? `${(file.size / 1024).toFixed(0)} KB` : "—"}
+              icon="ti-database"
+            />
+          </div>
 
-        <div className="flex flex-wrap gap-2 mt-1">
-          <button
-            type="button"
-            onClick={onAnalyze}
-            disabled={isAnalyzing || !file}
-            className={`inline-flex items-center justify-center px-4 py-1.5 rounded-md text-xs md:text-sm font-medium text-white transition
-              ${
-                isAnalyzing || !file
-                  ? "bg-emerald-300 cursor-not-allowed"
-                  : "bg-emerald-600 hover:bg-emerald-700"
-              }`}
-          >
-            {isAnalyzing ? "Analyzing…" : "Analyze with AI"}
-          </button>
-          <span className="text-[11px] text-gray-400 self-center">
-            Requires image + location.
-          </span>
+          <p style={styles.hint}>
+            The image and coordinates are sent to the AI model. Results appear below and are plotted on the live map.
+          </p>
+
+          <div style={styles.actions}>
+            <button
+              onClick={onAnalyze}
+              disabled={isAnalyzing || !file}
+              style={{
+                ...styles.analyzeBtn,
+                ...(isAnalyzing || !file ? styles.analyzeBtnDisabled : {}),
+              }}
+            >
+              <i
+                className={`ti ${isAnalyzing ? "ti-loader-2" : "ti-cpu"}`}
+                style={{ fontSize: 14 }}
+                aria-hidden="true"
+              />
+              {isAnalyzing ? "Analyzing…" : "Analyze with AI"}
+            </button>
+
+            {file && (
+              <button onClick={onClear} style={styles.clearBtn}>
+                <i className="ti ti-x" style={{ fontSize: 13 }} aria-hidden="true" />
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+function MetaField({ label, value, icon }) {
+  return (
+    <div style={metaStyles.field}>
+      <div style={metaStyles.label}>
+        <i className={`ti ${icon}`} style={{ fontSize: 11 }} aria-hidden="true" />
+        {label}
+      </div>
+      <div style={metaStyles.value}>{value}</div>
+    </div>
+  );
+}
+
+const styles = {
+  card: {
+    background: "#fff",
+    border: "0.5px solid rgba(0,0,0,0.08)",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "12px 16px",
+    borderBottom: "0.5px solid rgba(0,0,0,0.06)",
+    background: "#F7F8F5",
+  },
+  headerIcon: {
+    fontSize: 16,
+    color: "#1B5E20",
+  },
+  headerTitle: {
+    fontSize: 14,
+    fontWeight: 500,
+    color: "#333",
+  },
+  body: {
+    display: "flex",
+    gap: 16,
+    padding: 16,
+  },
+  previewBox: {
+    width: 160,
+    height: 160,
+    flexShrink: 0,
+    borderRadius: 8,
+    overflow: "hidden",
+    border: "0.5px solid rgba(0,0,0,0.08)",
+    background: "#F7F8F5",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+  previewEmpty: {
+    textAlign: "center",
+  },
+  previewEmptyText: {
+    fontSize: 11,
+    color: "#aaa",
+  },
+  meta: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  metaGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+  },
+  hint: {
+    fontSize: 12,
+    color: "#888",
+    lineHeight: 1.5,
+    margin: 0,
+  },
+  actions: {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    marginTop: "auto",
+  },
+  analyzeBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 16px",
+    background: "#1B5E20",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+  },
+  analyzeBtnDisabled: {
+    background: "#a5d6a7",
+    cursor: "not-allowed",
+  },
+  clearBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "7px 12px",
+    background: "transparent",
+    border: "0.5px solid #d0d0d0",
+    color: "#666",
+    borderRadius: 8,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+};
+
+const metaStyles = {
+  field: {
+    background: "#F7F8F5",
+    borderRadius: 7,
+    padding: "7px 10px",
+  },
+  label: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 10,
+    color: "#999",
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+  },
+  value: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#1a1a1a",
+    wordBreak: "break-all",
+  },
+};
