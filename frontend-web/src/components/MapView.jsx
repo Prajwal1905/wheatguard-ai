@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -15,7 +15,7 @@ import NdviTrendGraph from "./NdviTrendGraph";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 delete L.Icon.Default.prototype._getIconUrl;
-L.IconDefault = L.Icon.Default.mergeOptions({
+L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9/dist/images/marker-shadow.png",
@@ -23,51 +23,27 @@ L.IconDefault = L.Icon.Default.mergeOptions({
 
 const iconBase =
   "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img";
+const makeIcon = (color) =>
+  new L.Icon({
+    iconUrl: `${iconBase}/marker-icon-${color}.png`,
+    shadowUrl: `${iconBase}/marker-shadow.png`,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+  });
+const redIcon = makeIcon("red");
+const orangeIcon = makeIcon("orange");
+const greenIcon = makeIcon("green");
 
-const redIcon = new L.Icon({
-  iconUrl: `${iconBase}/marker-icon-red.png`,
-  shadowUrl: `${iconBase}/marker-shadow.png`,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
+function severityIcon(sev) {
+  if (sev === "High" || sev === "Critical") return redIcon;
+  if (sev === "Medium" || sev === "Moderate") return orangeIcon;
+  return greenIcon;
+}
 
-const orangeIcon = new L.Icon({
-  iconUrl: `${iconBase}/marker-icon-orange.png`,
-  shadowUrl: `${iconBase}/marker-shadow.png`,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-
-const greenIcon = new L.Icon({
-  iconUrl: `${iconBase}/marker-icon-green.png`,
-  shadowUrl: `${iconBase}/marker-shadow.png`,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-
-function parseLatLon(input, _isLat = true) {
+function parseLatLon(input) {
   if (!input) return null;
-  input = input.trim().toUpperCase().replace(/\s+/g, "");
-
-  if (/^\d{6}$/.test(input)) {
-    let d = +input.slice(0, 2);
-    let m = +input.slice(2, 4);
-    let s = +input.slice(4, 6);
-    return d + m / 60 + s / 3600;
-  }
-
-  let compact = input.match(/^(\d{2,3})(\d{2})(\d{2})([NSEW])$/);
-  if (compact) {
-    let d = +compact[1],
-      m = +compact[2],
-      s = +compact[3];
-    let val = d + m / 60 + s / 3600;
-    if (["S", "W"].includes(compact[4])) val = -val;
-    return val;
-  }
-
-  if (!isNaN(parseFloat(input))) return parseFloat(input);
-
+  const cleaned = input.trim().replace(/\s+/g, "");
+  if (!isNaN(parseFloat(cleaned))) return parseFloat(cleaned);
   return null;
 }
 
@@ -76,13 +52,11 @@ function ClickNDVI({ setClicked }) {
     click: async (e) => {
       const { lat, lng } = e.latlng;
       setClicked({ status: "loading", lat, lon: lng });
-
       try {
         const res = await fetch(
           `${API_BASE}/api/sentinel_ndvi_value?lat=${lat}&lon=${lng}`,
         );
         const data = await res.json();
-
         setClicked({
           status: "ok",
           lat,
@@ -96,161 +70,128 @@ function ClickNDVI({ setClicked }) {
       }
     },
   });
-
   return null;
 }
 
 function HeatLayer({ points }) {
   const map = useMapEvents({});
-
   useEffect(() => {
-    if (!points || points.length === 0) return;
-
+    if (!points?.length) return;
     const layer = L.heatLayer(points, {
       radius: 55,
       blur: 15,
       maxZoom: 17,
       max: 3,
     }).addTo(map);
-
     return () => map.removeLayer(layer);
-  }, [points]);
-
+  }, [points, map]);
   return null;
 }
 
 function FlyToLocation({ center }) {
   const map = useMapEvents({});
   useEffect(() => {
-    if (center) {
-      map.flyTo([center.lat, center.lon], 16, { duration: 1.2 });
-    }
-  }, [center]);
+    if (center) map.flyTo([center.lat, center.lon], 16, { duration: 1.2 });
+  }, [center, map]);
   return null;
 }
 
-export default function MapView({ detections = [] }) {
+export default function MapView({
+  detections = [],
+  fields = [],
+  polygonMode = false,
+  forceCenter = null,
+}) {
   const [latInput, setLatInput] = useState("");
   const [lonInput, setLonInput] = useState("");
-
-  const [fields, setFields] = useState([]);
   const [satellite, setSatellite] = useState(false);
   const [heatmap, setHeatmap] = useState(false);
   const [ndviOn, setNdviOn] = useState(true);
-
   const [clicked, setClicked] = useState(null);
-  const [forceCenter, setForceCenter] = useState(null);
+  const [localCenter, setLocalCenter] = useState(null);
 
-  useEffect(() => {
-    async function loadFields() {
-      try {
-        const res = await fetch(`${API_BASE}/fields/`);
-        const data = await res.json();
-        setFields(data);
-      } catch (e) {
-        console.error("Error loading fields:", e);
-      }
-    }
-    loadFields();
-  }, []);
+  const center = forceCenter || localCenter;
 
   const handleSearch = () => {
-    const lat = parseLatLon(latInput, true);
-    const lon = parseLatLon(lonInput, false);
-
+    const lat = parseLatLon(latInput);
+    const lon = parseLatLon(lonInput);
     if (lat === null || lon === null) {
-      alert(" Invalid latitude or longitude format");
+      alert("Invalid latitude or longitude.");
       return;
     }
-
-    setForceCenter({ lat, lon });
+    setLocalCenter({ lat, lon });
   };
 
+  const heatPoints = detections.map((d) => [
+    d.lat,
+    d.lon,
+    d.severity === "High" || d.severity === "Critical"
+      ? 1.5
+      : d.severity === "Medium" || d.severity === "Moderate"
+        ? 1.0
+        : 0.6,
+  ]);
+
   return (
-    <div style={{ height: "75vh", width: "100%", position: "relative" }}>
-      <div
-        style={{
-          position: "absolute",
-          top: 90,
-          left: 10,
-          zIndex: 5000,
-          background: "#fff",
-          padding: 14,
-          width: 260,
-          borderRadius: 12,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-        }}
-      >
+    <div style={styles.root}>
+      {/* Search panel */}
+      <div style={styles.searchPanel}>
+        <div style={styles.searchTitle}>
+          <i
+            className="ti ti-search"
+            style={{ fontSize: 13, color: "#1B5E20" }}
+            aria-hidden="true"
+          />
+          Jump to location
+        </div>
         <input
           value={latInput}
           onChange={(e) => setLatInput(e.target.value)}
           placeholder="Latitude"
-          style={{
-            width: "90%",
-            padding: 8,
-            marginBottom: 8,
-            borderRadius: 6,
-            border: "1px solid #ccc",
-          }}
+          style={styles.searchInput}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
         />
-
         <input
           value={lonInput}
           onChange={(e) => setLonInput(e.target.value)}
           placeholder="Longitude"
-          style={{
-            width: "90%",
-            padding: 8,
-            borderRadius: 6,
-            border: "1px solid #ccc",
-          }}
+          style={{ ...styles.searchInput, marginTop: 6 }}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
         />
-
-        <button
-          onClick={handleSearch}
-          style={{
-            width: "95%",
-            marginTop: 10,
-            padding: 10,
-            background: "#0D6EFD",
-            color: "#fff",
-            fontWeight: 600,
-            borderRadius: 6,
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Locate & Show NDVI
+        <button onClick={handleSearch} style={styles.searchBtn}>
+          <i
+            className="ti ti-map-pin"
+            style={{ fontSize: 13 }}
+            aria-hidden="true"
+          />
+          Locate & show NDVI
         </button>
       </div>
 
-      <div
-        style={{
-          position: "absolute",
-          top: 20,
-          right: 20,
-          zIndex: 5000,
-          padding: 10,
-          background: "#fff",
-          borderRadius: 12,
-          display: "flex",
-          gap: 10,
-          boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-        }}
-      >
-        <button onClick={() => setSatellite(!satellite)}>
-          {satellite ? "🗺 Map" : "🛰 Satellite"}
-        </button>
-        <button onClick={() => setHeatmap(!heatmap)}>
-          {heatmap ? "📍 Markers" : "🔥 Heatmap"}
-        </button>
-        <button onClick={() => setNdviOn(!ndviOn)}>
-          {ndviOn ? "🌾 Hide NDVI" : "🌱 NDVI"}
-        </button>
+      {/* Layer toggles */}
+      <div style={styles.layerPanel}>
+        <ToggleBtn
+          active={satellite}
+          onClick={() => setSatellite(!satellite)}
+          icon={satellite ? "ti-map-2" : "ti-satellite"}
+          label={satellite ? "Map" : "Satellite"}
+        />
+        <ToggleBtn
+          active={heatmap}
+          onClick={() => setHeatmap(!heatmap)}
+          icon="ti-flame"
+          label={heatmap ? "Markers" : "Heatmap"}
+        />
+        <ToggleBtn
+          active={ndviOn}
+          onClick={() => setNdviOn(!ndviOn)}
+          icon="ti-leaf"
+          label={ndviOn ? "Hide NDVI" : "NDVI"}
+        />
       </div>
 
-      <MapContainer center={[20.5, 78.5]} zoom={6} style={{ height: "100%" }}>
-        <FlyToLocation center={forceCenter} />
+      <MapContainer center={[20.5, 78.5]} zoom={6} style={styles.map}>
+        {center && <FlyToLocation center={center} />}
 
         <TileLayer
           url={
@@ -267,95 +208,80 @@ export default function MapView({ detections = [] }) {
           />
         )}
 
-        {heatmap && (
-          <HeatLayer
-            points={detections.map((d) => [
-              d.lat,
-              d.lon,
-              d.severity === "High" ? 1.5 : d.severity === "Medium" ? 1.0 : 0.6,
-            ])}
-          />
-        )}
+        {heatmap && <HeatLayer points={heatPoints} />}
 
         <ClickNDVI setClicked={setClicked} />
 
         {fields.map((f) => {
           if (!f.polygon) return null;
-
           const poly = Array.isArray(f.polygon)
             ? f.polygon
             : JSON.parse(f.polygon);
-
-          const positions = poly.map((p) => [p[0], p[1]]);
-
           return (
             <Polygon
               key={f.id}
-              positions={positions}
-              pathOptions={{ color: "blue", weight: 2 }}
+              positions={poly.map((p) => [p[0], p[1]])}
+              pathOptions={{ color: "#1B5E20", weight: 2 }}
             >
               <Popup>
-                <div style={{ width: 220 }}>
-                  <h4>Field #{f.id}</h4>
-                  <b>Village:</b> {f.village} <br />
-                  <b>Crop:</b> {f.crop} <br />
-                  <b>Phone:</b> {f.phone} <br />
-                  <b>Farmer ID:</b> {f.farmer_id} <br />
-                  {f.photo_url && (
-                    <>
-                      <br />
-                      <img
-                        src={`${API_BASE}${f.photo_url}`}
-                        style={{ width: "100%", borderRadius: 8 }}
-                      />
-                    </>
-                  )}
-                  {f.field_photo_url && (
-                    <>
-                      <br />
-                      <img
-                        src={`${API_BASE}${f.field_photo_url}`}
-                        style={{
-                          width: "100%",
-                          borderRadius: 8,
-                          marginTop: 6,
-                        }}
-                      />
-                    </>
-                  )}
+                <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+                  <strong>Field #{f.id}</strong>
+                  <br />
+                  Village: {f.village}
+                  <br />
+                  Crop: {f.crop}
+                  <br />
+                  Phone: {f.phone}
                 </div>
               </Popup>
             </Polygon>
           );
         })}
 
-        {detections.map((d, idx) => (
-          <Marker
-            key={idx}
-            position={[d.lat, d.lon]}
-            icon={
-              d.severity === "High"
-                ? redIcon
-                : d.severity === "Medium"
-                  ? orangeIcon
-                  : greenIcon
-            }
-          >
-            <Popup>
-              <b>Disease:</b> {d.disease} <br />
-              <b>Severity:</b> {d.severity} <br />
-              <b>Lat:</b> {d.lat} <br />
-              <b>Lon:</b> {d.lon} <br />
+        {!heatmap &&
+          detections.map((d, idx) => (
+            <Marker
+              key={d.id || idx}
+              position={[d.lat, d.lon]}
+              icon={severityIcon(d.severity)}
+            >
+              <Popup>
+                <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+                  <strong>{d.disease}</strong>
+                  <br />
+                  Severity: {d.severity}
+                  <br />
+                  <span
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: 11,
+                      color: "#666",
+                    }}
+                  >
+                    {d.lat?.toFixed(4)}, {d.lon?.toFixed(4)}
+                  </span>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+        {clicked?.status === "ok" && (
+          <Marker position={[clicked.lat, clicked.lon]}>
+            <Popup minWidth={220}>
+              <div style={{ fontSize: 12 }}>
+                <strong>NDVI: {clicked.ndvi}</strong>
+                <br />
+                <span style={{ color: "#666" }}>{clicked.statusText}</span>
+                <NdviTrendGraph lat={clicked.lat} lon={clicked.lon} />
+              </div>
             </Popup>
           </Marker>
-        ))}
+        )}
 
-        {clicked && clicked.status === "ok" && (
+        {clicked?.status === "loading" && (
           <Marker position={[clicked.lat, clicked.lon]}>
             <Popup>
-              <b>NDVI:</b> {clicked.ndvi} <br />
-              <b>{clicked.statusText}</b> <br />
-              <NdviTrendGraph lat={clicked.lat} lon={clicked.lon} />
+              <span style={{ fontSize: 12 }}>Loading NDVI…</span>
             </Popup>
           </Marker>
         )}
@@ -363,3 +289,111 @@ export default function MapView({ detections = [] }) {
     </div>
   );
 }
+
+function ToggleBtn({ active, onClick, icon, label }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        ...toggleStyles.btn,
+        ...(active ? toggleStyles.active : {}),
+      }}
+    >
+      <i className={`ti ${icon}`} style={{ fontSize: 13 }} aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
+const toggleStyles = {
+  btn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "6px 10px",
+    background: "#fff",
+    border: "0.5px solid rgba(0,0,0,0.15)",
+    borderRadius: 7,
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#444",
+    cursor: "pointer",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+  },
+  active: {
+    background: "#1B5E20",
+    color: "#fff",
+    borderColor: "#1B5E20",
+  },
+};
+
+const styles = {
+  root: {
+    position: "relative",
+    height: "75vh",
+    width: "100%",
+    borderRadius: 12,
+    overflow: "hidden",
+    border: "0.5px solid rgba(0,0,0,0.08)",
+  },
+  map: {
+    height: "100%",
+    width: "100%",
+  },
+  searchPanel: {
+    position: "absolute",
+    top: 80,
+    left: 10,
+    zIndex: 5000,
+    background: "#fff",
+    padding: 14,
+    width: 220,
+    borderRadius: 10,
+    boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+    border: "0.5px solid rgba(0,0,0,0.08)",
+  },
+  searchTitle: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#333",
+    marginBottom: 8,
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },
+  searchInput: {
+    width: "100%",
+    padding: "7px 10px",
+    borderRadius: 6,
+    border: "0.5px solid #d0d0d0",
+    fontSize: 13,
+    color: "#1a1a1a",
+    background: "#fafafa",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  searchBtn: {
+    width: "100%",
+    marginTop: 8,
+    padding: "8px 0",
+    background: "#1B5E20",
+    color: "#fff",
+    border: "none",
+    borderRadius: 7,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  layerPanel: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    zIndex: 5000,
+    display: "flex",
+    gap: 6,
+  },
+};
