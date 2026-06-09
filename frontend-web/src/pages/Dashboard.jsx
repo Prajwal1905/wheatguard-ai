@@ -11,15 +11,14 @@ import toast from "react-hot-toast";
 export default function Dashboard() {
   const [detections, setDetections] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [loading, setLoading] = useState(false);
 
- 
   const [filters, setFilters] = useState({
     severity: "All",
     disease: "All",
     ndvi: "All",
   });
 
-  
   const [ndviDate, setNdviDate] = useState("2024-11-14");
 
   useEffect(() => {
@@ -30,15 +29,9 @@ export default function Dashboard() {
         if (prev.some((d) => d.id === data.id)) return prev;
         return [...prev, data];
       });
-
-      toast.success(`🌾 New detection: ${data.disease} (${data.severity})`);
-
+      toast.success(`New detection: ${data.disease} (${data.severity})`);
       if (data.severity === "High") {
-        toast.error(
-          `🚨 Critical hotspot detected near (${data.lat.toFixed(
-            3
-          )}, ${data.lon.toFixed(3)})`
-        );
+        toast.error(`Critical hotspot near (${data.lat.toFixed(3)}, ${data.lon.toFixed(3)})`);
       }
     });
 
@@ -46,153 +39,103 @@ export default function Dashboard() {
   }, []);
 
   async function fetchData() {
+    setLoading(true);
     try {
       const data = await getMapData();
       setDetections(data);
       setLastUpdated(new Date().toLocaleString());
     } catch (e) {
       console.error("Error fetching map data:", e);
+    } finally {
+      setLoading(false);
     }
   }
 
-  const uniqueDiseases = [
-    ...new Set(detections.map((d) => d.disease).filter(Boolean)),
-  ];
+  const uniqueDiseases = [...new Set(detections.map((d) => d.disease).filter(Boolean))];
 
-  
   const filteredDetections = detections.filter((d) => {
-    const sevMatch =
-      filters.severity === "All" || d.severity === filters.severity;
-
-    const disMatch =
-      filters.disease === "All" || d.disease === filters.disease;
-
-    const ndviMatch =
-      filters.ndvi === "All" ||
-      (d.ndvi_category && d.ndvi_category === filters.ndvi);
-
+    const sevMatch  = filters.severity === "All" || d.severity === filters.severity;
+    const disMatch  = filters.disease  === "All" || d.disease  === filters.disease;
+    const ndviMatch = filters.ndvi     === "All" || (d.ndvi_category && d.ndvi_category === filters.ndvi);
     return sevMatch && disMatch && ndviMatch;
   });
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "2fr 1fr",
-        gap: "20px",
-        padding: "10px",
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h2 style={{color:"black"}}> Dashboard Overview</h2>
-          <button
-            onClick={fetchData}
-            style={{
-              background: "#1565c0",
-              color: "#fff",
-              padding: "6px 12px",
-              borderRadius: "6px",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            🔄 Refresh
+    <div style={styles.layout}>
+      <div style={styles.main}>
+        <div style={styles.pageHeader}>
+          <div>
+            <h1 style={styles.title}>Overview</h1>
+            {lastUpdated && (
+              <p style={styles.lastUpdated}>
+                <i className="ti ti-clock" style={{ fontSize: 12 }} aria-hidden="true" />
+                Updated {lastUpdated}
+              </p>
+            )}
+          </div>
+          <button onClick={fetchData} disabled={loading} style={styles.refreshBtn}>
+            <i className={`ti ti-refresh${loading ? " ti-spin" : ""}`} style={{ fontSize: 14 }} aria-hidden="true" />
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
 
-        {lastUpdated && (
-          <div style={{ fontSize: 13, color: "#333" }}>
-            ⏱ Last updated: <b>{lastUpdated}</b>
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          
-          <select
+        <div style={styles.filterBar}>
+          <FilterSelect
             value={filters.severity}
-            onChange={(e) =>
-              setFilters({ ...filters, severity: e.target.value })
-            }
-            style={selectStyle}
-          >
-            <option value="All">All Severities</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
-
-          <select
+            onChange={(v) => setFilters({ ...filters, severity: v })}
+            icon="ti-alert-triangle"
+            label="Severity"
+            options={[
+              { value: "All", label: "All severities" },
+              { value: "High", label: "High" },
+              { value: "Medium", label: "Medium" },
+              { value: "Low", label: "Low" },
+            ]}
+          />
+          <FilterSelect
             value={filters.disease}
-            onChange={(e) =>
-              setFilters({ ...filters, disease: e.target.value })
-            }
-            style={selectStyle}
-          >
-            <option value="All">All Diseases</option>
-            {uniqueDiseases.map((d) => (
-              <option key={d}>{d}</option>
-            ))}
-          </select>
-
-          <select
+            onChange={(v) => setFilters({ ...filters, disease: v })}
+            icon="ti-virus"
+            label="Disease"
+            options={[
+              { value: "All", label: "All diseases" },
+              ...uniqueDiseases.map((d) => ({ value: d, label: d })),
+            ]}
+          />
+          <FilterSelect
             value={filters.ndvi}
-            onChange={(e) =>
-              setFilters({ ...filters, ndvi: e.target.value })
-            }
-            style={selectStyle}
-          >
-            <option value="All">NDVI: All</option>
-            <option value="Healthy">Healthy</option>
-            <option value="Moderate">Moderate</option>
-            <option value="Stressed">Stressed</option>
-            <option value="Critical">Critical</option>
-          </select>
-
-          
+            onChange={(v) => setFilters({ ...filters, ndvi: v })}
+            icon="ti-leaf"
+            label="NDVI"
+            options={[
+              { value: "All", label: "NDVI: all" },
+              { value: "Healthy", label: "Healthy" },
+              { value: "Moderate", label: "Moderate" },
+              { value: "Stressed", label: "Stressed" },
+              { value: "Critical", label: "Critical" },
+            ]}
+          />
           <input
             type="date"
             value={ndviDate}
             onChange={(e) => setNdviDate(e.target.value)}
-            style={selectStyle}
+            style={styles.dateInput}
+            aria-label="NDVI date"
           />
         </div>
 
         <StatsCards detections={filteredDetections} />
 
-        <div
-          style={{
-            flex: 1,
-            minHeight: "420px",
-            borderRadius: "10px",
-            overflow: "hidden",
-            background: "#f4f4f4",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          }}
-        >
+        <div style={styles.mapWrap}>
           <MapView
             detections={filteredDetections}
-            ndviDate={ndviDate}   
-            polygonMode={false}   
+            ndviDate={ndviDate}
+            polygonMode={false}
           />
         </div>
       </div>
 
-      
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "20px",
-          color: "black",
-        }}
-      >
+      <div style={styles.sidebar}>
         <DiseaseTrends detections={filteredDetections} />
         <LiveFeedPanel detections={filteredDetections} />
       </div>
@@ -200,9 +143,119 @@ export default function Dashboard() {
   );
 }
 
-const selectStyle = {
-  padding: "8px 10px",
-  borderRadius: "6px",
-  border: "1px solid #bbb",
-  fontSize: "14px",
+function FilterSelect({ value, onChange, icon, label, options }) {
+  return (
+    <div style={filterStyles.wrap}>
+      <i className={`ti ${icon}`} style={filterStyles.icon} aria-hidden="true" />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={filterStyles.select}
+        aria-label={label}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+const styles = {
+  layout: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr",
+    gap: 20,
+    padding: 20,
+    color: "#1a1a1a",
+  },
+  main: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
+  sidebar: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
+  pageHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 500,
+    color: "#1a1a1a",
+    margin: 0,
+  },
+  lastUpdated: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 4,
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  },
+  refreshBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 13px",
+    background: "transparent",
+    border: "0.5px solid #d0d0d0",
+    borderRadius: 7,
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#444",
+    cursor: "pointer",
+  },
+  filterBar: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  dateInput: {
+    padding: "7px 10px",
+    borderRadius: 7,
+    border: "0.5px solid #d0d0d0",
+    fontSize: 13,
+    color: "#333",
+    background: "#fafafa",
+    outline: "none",
+    cursor: "pointer",
+  },
+  mapWrap: {
+    flex: 1,
+    minHeight: 420,
+    borderRadius: 12,
+    overflow: "hidden",
+    border: "0.5px solid rgba(0,0,0,0.08)",
+  },
+};
+
+const filterStyles = {
+  wrap: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#fafafa",
+    border: "0.5px solid #d0d0d0",
+    borderRadius: 7,
+    padding: "0 8px",
+  },
+  icon: {
+    fontSize: 14,
+    color: "#999",
+  },
+  select: {
+    border: "none",
+    background: "transparent",
+    padding: "7px 4px",
+    fontSize: 13,
+    color: "#333",
+    cursor: "pointer",
+    outline: "none",
+  },
 };
