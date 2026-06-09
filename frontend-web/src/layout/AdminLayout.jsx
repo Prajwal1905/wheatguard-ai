@@ -1,36 +1,39 @@
 import React from "react";
-import { Outlet } from "react-router-dom";   // ← REQUIRED
+import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 
 export default function AdminLayout() {
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
+    <div style={styles.root}>
       <Sidebar />
-
-      <div style={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+      <div style={styles.body}>
         <Topbar />
-
-        <div
-          style={{
-            flex: 1,
-            padding: "20px",
-            overflow: "auto",
-            background: "#f4f6f8",
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "10px",
-              padding: "20px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            }}
-          >
-            <Outlet /> 
-          </div>
+        <div style={styles.content}>
+          <Outlet />
         </div>
       </div>
     </div>
   );
 }
+
+const styles = {
+  root: {
+    display: "flex",
+    height: "100vh",
+    width: "100vw",
+    background: "#F7F8F5",
+    overflow: "hidden",
+  },
+  body: {
+    flexGrow: 1,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  content: {
+    flex: 1,
+    padding: "24px 20px",
+    overflowY: "auto",
+  },
+};
