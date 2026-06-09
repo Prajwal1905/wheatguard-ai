@@ -2,232 +2,267 @@ import React, { useEffect, useState } from "react";
 import { getNDVIStressAlerts, getMapData } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
+const TABS = [
+  { key: "stress", label: "NDVI stress", icon: "ti-leaf" },
+  { key: "drone",  label: "Drone",       icon: "ti-drone" },
+  { key: "manual", label: "Manual",      icon: "ti-alert-triangle" },
+];
+
+const SEVERITIES = ["All", "Critical", "High", "Moderate", "Low"];
+
 export default function Alerts() {
   const navigate = useNavigate();
-
   const [tab, setTab] = useState("stress");
   const [severityFilter, setSeverityFilter] = useState("All");
-
   const [stressAlerts, setStressAlerts] = useState([]);
   const [droneAlerts, setDroneAlerts] = useState([]);
   const [manualAlerts, setManualAlerts] = useState([]);
 
-  useEffect(() => {
-    loadAlerts();
-  }, []);
+  useEffect(() => { loadAlerts(); }, []);
 
   async function loadAlerts() {
     try {
       const stress = await getNDVIStressAlerts();
       setStressAlerts(stress);
-
       const mapData = await getMapData();
-      const drone = mapData.filter((x) => x.source === "drone");
-      const manual = mapData.filter((x) => x.source === "manual");
-
-      setDroneAlerts(drone);
-      setManualAlerts(manual);
+      setDroneAlerts(mapData.filter((x) => x.source === "drone"));
+      setManualAlerts(mapData.filter((x) => x.source === "manual"));
     } catch (err) {
       console.error(err);
     }
   }
 
   function applyFilter(list) {
-    return severityFilter === "All"
-      ? list
-      : list.filter((a) => a.severity === severityFilter);
-  }
-
-  function colorOf(sev) {
-    if (sev === "Critical") return "#c62828";
-    if (sev === "High") return "#f57c00";
-    if (sev === "Moderate") return "#fbc02d";
-    if (sev === "Low") return "#388e3c";
-    return "#555";
+    return severityFilter === "All" ? list : list.filter((a) => a.severity === severityFilter);
   }
 
   function viewOnMap(lat, lon) {
     navigate(`/map?lat=${lat}&lon=${lon}`);
   }
 
-  function renderTable(list, type) {
-    const items = applyFilter(list);
-
-    if (!items.length)
-      return (
-        <div style={{ padding: 20, textAlign: "center", color: "#777" }}>
-          No alerts found.
-        </div>
-      );
-
-    return (
-      <table style={styles.table}>
-        <thead>
-          <tr>
-            <th style={styles.th}>Type</th>
-            <th style={styles.th}>Severity</th>
-            <th style={styles.th}>Location</th>
-            <th style={styles.th}>Details</th>
-            <th style={styles.th}>Action</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {items.map((a) => (
-            <tr key={a.id} style={styles.tr}>
-              <td style={styles.td}>
-                {type === "stress" && "🌱 NDVI Stress"}
-                {type === "drone" && "🚁 Drone Detection"}
-                {type === "manual" && "⚠ Manual Alert"}
-              </td>
-
-              <td style={{ ...styles.td, fontWeight: "bold", color: colorOf(a.severity) }}>
-                {a.severity}
-              </td>
-
-              <td style={styles.td}>
-                {a.lat.toFixed(4)}, {a.lon.toFixed(4)}
-              </td>
-
-              <td style={styles.td}>
-                {type === "stress" && (
-                  <>
-                    Drop: <b>{a.drop}</b>
-                    <br />
-                    Baseline: {a.baseline_ndvi}
-                    <br />
-                    Current: {a.current_ndvi}
-                  </>
-                )}
-
-                {type === "drone" && (
-                  <>
-                    Disease: <b>{a.disease}</b>
-                    <br />
-                    Severity: {a.severity}
-                  </>
-                )}
-
-                {type === "manual" && (
-                  <>
-                    Disease: <b>{a.disease}</b>
-                    <br />
-                    Message: {a.message}
-                  </>
-                )}
-              </td>
-
-              <td style={styles.td}>
-                <button style={styles.viewBtn} onClick={() => viewOnMap(a.lat, a.lon)}>
-                  📍 View
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  }
+  const activeList = tab === "stress" ? stressAlerts : tab === "drone" ? droneAlerts : manualAlerts;
+  const filtered = applyFilter(activeList);
 
   return (
-    <div style={{ padding: 20, color:"black" }}>
-      <h2> Alerts Panel</h2>
-
-      
-      <div style={{ display: "flex", gap: 10, margin: "15px 0" }}>
-        <button
-          style={tab === "stress" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("stress")}
-        >
-          🌱 NDVI Stress Alerts
-        </button>
-
-        <button
-          style={tab === "drone" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("drone")}
-        >
-          🚁 Drone Alerts
-        </button>
-
-        <button
-          style={tab === "manual" ? styles.tabActive : styles.tab}
-          onClick={() => setTab("manual")}
-        >
-          ⚠ Manual Alerts
-        </button>
-      </div>
-
-      
-      <div style={{ marginBottom: 10 }}>
+    <div style={styles.page}>
+      <div style={styles.pageHeader}>
+        <div>
+          <h1 style={styles.title}>Alerts</h1>
+          <p style={styles.subtitle}>Field detections and stress events</p>
+        </div>
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
-          style={{
-            padding: "6px 12px",
-            borderRadius: 6,
-            border: "1px solid #aaa",
-          }}
+          style={styles.select}
+          aria-label="Filter by severity"
         >
-          <option value="All">All</option>
-          <option value="Critical">Critical</option>
-          <option value="High">High</option>
-          <option value="Moderate">Moderate</option>
-          <option value="Low">Low</option>
+          {SEVERITIES.map((s) => (
+            <option key={s} value={s}>{s === "All" ? "All severities" : s}</option>
+          ))}
         </select>
       </div>
 
-      {tab === "stress" && renderTable(stressAlerts, "stress")}
-      {tab === "drone" && renderTable(droneAlerts, "drone")}
-      {tab === "manual" && renderTable(manualAlerts, "manual")}
+      <div style={styles.tabBar} role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            style={tab === t.key ? { ...styles.tab, ...styles.tabActive } : styles.tab}
+          >
+            <i className={`ti ${t.icon}`} style={{ fontSize: 14 }} aria-hidden="true" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={styles.tableWrap}>
+        {filtered.length === 0 ? (
+          <div style={styles.empty}>
+            <i className="ti ti-inbox" style={{ fontSize: 28, color: "#ccc", display: "block", marginBottom: 8 }} aria-hidden="true" />
+            No alerts match this filter.
+          </div>
+        ) : (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Location</th>
+                <th style={styles.th}>Details</th>
+                <th style={styles.th}>Severity</th>
+                <th style={styles.th} aria-label="Actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a) => (
+                <tr key={a.id} style={styles.tr}>
+                  <td style={styles.td}>
+                    <span style={styles.coords}>
+                      {a.lat.toFixed(4)}, {a.lon.toFixed(4)}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    {tab === "stress" && (
+                      <span>
+                        Drop <strong>{a.drop}</strong> &mdash; {a.baseline_ndvi} → {a.current_ndvi}
+                      </span>
+                    )}
+                    {tab === "drone" && (
+                      <span><strong>{a.disease}</strong></span>
+                    )}
+                    {tab === "manual" && (
+                      <span><strong>{a.disease}</strong> — {a.message}</span>
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    <span style={{ ...styles.badge, ...severityStyle(a.severity) }}>
+                      {a.severity}
+                    </span>
+                  </td>
+                  <td style={styles.td}>
+                    <button
+                      style={styles.viewBtn}
+                      onClick={() => viewOnMap(a.lat, a.lon)}
+                      aria-label={`View location ${a.lat.toFixed(4)}, ${a.lon.toFixed(4)} on map`}
+                    >
+                      <i className="ti ti-map-pin" style={{ fontSize: 13 }} aria-hidden="true" />
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
 
+function severityStyle(sev) {
+  if (sev === "Critical") return { background: "#FCEBEB", color: "#A32D2D" };
+  if (sev === "High")     return { background: "#FAEEDA", color: "#854F0B" };
+  if (sev === "Moderate") return { background: "#EAF3DE", color: "#3B6D11" };
+  if (sev === "Low")      return { background: "#E6F1FB", color: "#185FA5" };
+  return { background: "#F1EFE8", color: "#5F5E5A" };
+}
+
 const styles = {
-  table: {
-    width: "100%",
-    background: "#fff",
-    borderRadius: 10,
-    borderCollapse: "collapse",
-    overflow: "hidden",
+  page: {
+    padding: "24px 20px",
+    color: "#1a1a1a",
   },
-  th: {
-    padding: "10px",
-    background: "#e8eaf6",
-    textAlign: "left",
-    fontWeight: "bold",
-    fontSize: 14,
+  pageHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 20,
   },
-  tr: {
-    borderBottom: "1px solid #ddd",
+  title: {
+    fontSize: 20,
+    fontWeight: 500,
+    color: "#1a1a1a",
+    margin: 0,
   },
-  td: {
-    padding: "10px",
-    fontSize: 14,
+  subtitle: {
+    fontSize: 13,
+    color: "#888",
+    marginTop: 3,
   },
-  viewBtn: {
-    padding: "6px 12px",
-    background: "#2e7d32",
-    color: "white",
-    borderRadius: 6,
-    border: "none",
+  select: {
+    padding: "7px 10px",
+    borderRadius: 7,
+    border: "0.5px solid #d0d0d0",
+    fontSize: 13,
+    color: "#333",
+    background: "#fafafa",
     cursor: "pointer",
+    outline: "none",
+  },
+  tabBar: {
+    display: "flex",
+    gap: 6,
+    marginBottom: 16,
   },
   tab: {
-    padding: "8px 14px",
-    background: "#ccc",
-    border: "none",
-    borderRadius: 6,
-    fontWeight: "bold",
+    padding: "7px 14px",
+    background: "transparent",
+    border: "0.5px solid #d0d0d0",
+    borderRadius: 7,
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#666",
     cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    transition: "all 0.15s",
   },
   tabActive: {
-    padding: "8px 14px",
-    background: "#1976d2",
-    color: "white",
-    borderRadius: 6,
-    fontWeight: "bold",
+    background: "#1B5E20",
+    color: "#fff",
+    borderColor: "#1B5E20",
+  },
+  tableWrap: {
+    background: "#fff",
+    borderRadius: 12,
+    border: "0.5px solid rgba(0,0,0,0.1)",
+    overflow: "hidden",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+  },
+  th: {
+    padding: "10px 14px",
+    background: "#F7F8F5",
+    textAlign: "left",
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#888",
+    borderBottom: "0.5px solid rgba(0,0,0,0.08)",
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+  },
+  tr: {
+    borderBottom: "0.5px solid rgba(0,0,0,0.06)",
+  },
+  td: {
+    padding: "11px 14px",
+    fontSize: 13,
+    color: "#333",
+    verticalAlign: "middle",
+  },
+  coords: {
+    fontFamily: "monospace",
+    fontSize: 12,
+    color: "#666",
+  },
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "3px 9px",
+    borderRadius: 20,
+    fontSize: 12,
+    fontWeight: 500,
+  },
+  viewBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "5px 11px",
+    background: "transparent",
+    border: "0.5px solid #1B5E20",
+    color: "#1B5E20",
+    borderRadius: 7,
+    fontSize: 12,
+    fontWeight: 500,
     cursor: "pointer",
-    border: "none",
+  },
+  empty: {
+    padding: "48px 20px",
+    textAlign: "center",
+    color: "#aaa",
+    fontSize: 14,
   },
 };
