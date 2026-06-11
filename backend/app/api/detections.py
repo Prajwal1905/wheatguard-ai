@@ -1,6 +1,6 @@
 # app/api/detections.py
 
-from fastapi import APIRouter, Depends, File, UploadFile, Form, Body
+from fastapi import APIRouter, Depends, File, UploadFile, Form, Body, HTTPException
 from sqlalchemy.orm import Session
 import uuid
 
@@ -11,6 +11,7 @@ from app import crud
 from app.utils.socket_manager import broadcast_new_detection
 from app.utils.supabase_upload import upload_detection_image
 from app.ml.model_utils import predict_image
+from app.ml.ai_helper import get_short_remedy
 
 router = APIRouter(prefix="/detections", tags=["Detections"])
 
@@ -24,7 +25,6 @@ def get_db():
 
 
 def calculate_severity(confidence: float) -> str:
-    """Single source of truth for severity calculation."""
     if confidence >= 85:
         return "High"
     if confidence >= 60:
@@ -54,10 +54,10 @@ async def predict_disease(
         if "error" in result:
             return result
 
-        disease    = result["exact_disease"]
-        confidence = float(result["confidence"])
-        severity   = calculate_severity(confidence)
-        remedy     = result["remedy"]
+        disease     = result["exact_disease"]
+        confidence  = float(result["confidence"])
+        severity    = calculate_severity(confidence)
+        remedy      = result["remedy"]
         explanation = result["ai_explanation"]
 
         report = Report(source="mobile", image_url=image_url, lat=lat, lon=lon)
@@ -75,13 +75,13 @@ async def predict_disease(
         })
 
         return {
-            "report_id":    report.id,
-            "detection_id": detection.id,
-            "image_url":    image_url,
-            "disease":      disease,
-            "confidence":   round(confidence, 2),
-            "severity":     severity,
-            "remedy":       remedy,
+            "report_id":      report.id,
+            "detection_id":   detection.id,
+            "image_url":      image_url,
+            "disease":        disease,
+            "confidence":     round(confidence, 2),
+            "severity":       severity,
+            "remedy":         remedy,
             "ai_explanation": explanation,
         }
 
@@ -96,8 +96,8 @@ async def save_detection(
     db: Session = Depends(get_db),
 ):
     try:
-        lat = payload.get("lat")
-        lon = payload.get("lon")
+        lat        = payload.get("lat")
+        lon        = payload.get("lon")
         confidence = float(payload.get("confidence", 0))
 
         report = Report(
@@ -142,7 +142,6 @@ def get_map_data(
     limit: int = 500,
     db: Session = Depends(get_db),
 ):
-    """Returns paginated detections for the map. Default limit 500."""
     detections = (
         db.query(Detection)
         .join(Report, Detection.report_id == Report.id)
@@ -166,6 +165,35 @@ def get_map_data(
         }
         for d in detections
     ]
+
+
+@router.get("/{detection_id}")
+def get_detection_detail(detection_id: int, db: Session = Depends(get_db)):
+    
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    remedy = None
+    try:
+        remedy = get_short_remedy(detection.disease_label, language="en")
+    except Exception:
+        pass
+
+    return {
+        "id":            detection.id,
+        "disease":       detection.disease_label,
+        "confidence":    round(float(detection.confidence or 0), 2),
+        "severity":      detection.severity,
+        "model_version": detection.model_version,
+        "timestamp":     detection.created_at.isoformat(),
+        "image_url":     detection.report.image_url if detection.report else None,
+        "lat":           float(detection.report.lat) if detection.report else None,
+        "lon":           float(detection.report.lon) if detection.report else None,
+        "source":        detection.report.source if detection.report else None,
+        "remedy":        remedy,
+    }
 
 
 @router.delete("/{report_id}")
