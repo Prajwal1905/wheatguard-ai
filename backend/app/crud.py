@@ -2,7 +2,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-# Models
 from app.models.report import Report
 from app.models.detection import Detection
 from app.models.alert import Alert
@@ -44,10 +43,6 @@ def create_alert(db: Session, data):
 def get_alerts(db: Session):
     return db.query(Alert).order_by(Alert.created_at.desc()).all()
 
-
-# ---------------------------------------------------------
-# FCM DEVICE TOKENS
-# ---------------------------------------------------------
 def save_fcm_token(db: Session, data):
     existing = db.query(FCMDevice).filter(
         FCMDevice.device_id == data.device_id
@@ -88,12 +83,16 @@ def save_ndvi(db: Session, lat: float, lon: float, ndvi: float):
     db.refresh(entry)
     return entry
 
+COORD_TOLERANCE = 0.0001
+
 def get_ndvi_history(db: Session, lat: float, lon: float):
     return (
         db.query(NDVIHistory)
         .filter(
-            NDVIHistory.lat == lat,
-            NDVIHistory.lon == lon
+            NDVIHistory.lat >= lat - COORD_TOLERANCE,
+            NDVIHistory.lat <= lat + COORD_TOLERANCE,
+            NDVIHistory.lon >= lon - COORD_TOLERANCE,
+            NDVIHistory.lon <= lon + COORD_TOLERANCE,
         )
         .order_by(NDVIHistory.timestamp.asc())
         .all()
