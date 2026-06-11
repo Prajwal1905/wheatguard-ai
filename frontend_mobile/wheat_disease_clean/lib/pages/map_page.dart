@@ -30,52 +30,78 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   final MapController _mapController = MapController();
-  List<dynamic> detections = [];
-  LatLng initialCenter = const LatLng(20.5937, 78.9629);
-  double initialZoom = 5.0;
-  bool loading = true;
+
+  List<dynamic> _allDetections = [];
+  String _severityFilter       = 'All';
+  bool _loading                = true;
+  bool _refreshing             = false;
+
+  LatLng _initialCenter = const LatLng(20.5937, 78.9629);
+  double _initialZoom   = 5.0;
 
   static const _green = Color(0xFF2E7D32);
 
   @override
   void initState() {
     super.initState();
-    final double? lat = widget.focusLat ?? widget.alertLat;
-    final double? lon = widget.focusLon ?? widget.alertLon;
+    final lat = widget.focusLat ?? widget.alertLat;
+    final lon = widget.focusLon ?? widget.alertLon;
     if (lat != null && lon != null) {
-      initialCenter = LatLng(lat, lon);
-      initialZoom = 15;
+      _initialCenter = LatLng(lat, lon);
+      _initialZoom   = 15;
     }
     _fetchMapData();
   }
 
-  Future<void> _fetchMapData() async {
+  Future<void> _fetchMapData({bool isRefresh = false}) async {
+    if (isRefresh) {
+      setState(() => _refreshing = true);
+    }
+
     try {
-      final url = Uri.parse("${ApiService.baseUrl}/detections/map_data");
-      final res = await http.get(url);
+      final headers = await ApiService._authHeaders();
+      final url     = Uri.parse('${ApiService.baseUrl}/detections/map_data');
+      final res     = await http.get(url, headers: headers);
+
       if (res.statusCode == 200) {
-        detections = jsonDecode(res.body);
+        final data = jsonDecode(res.body) as List;
+        if (mounted) {
+          setState(() {
+            _allDetections = data
+                .where((d) => d['lat'] != null && d['lon'] != null)
+                .toList();
+          });
+        }
       }
     } catch (e) {
-      debugPrint("Map data fetch error: $e");
+      debugPrint('Map data fetch error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading    = false;
+          _refreshing = false;
+        });
+      }
     }
-    if (!mounted) return;
-    setState(() => loading = false);
+  }
+
+  List<dynamic> get _filtered {
+    if (_severityFilter == 'All') return _allDetections;
+    return _allDetections.where((d) {
+      final sev = (d['severity'] ?? '').toString().toLowerCase();
+      return sev == _severityFilter.toLowerCase();
+    }).toList();
   }
 
   Future<void> _locateMe() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("GPS is OFF")),
-      );
+      _showSnack('GPS is turned off');
       return;
     }
     LocationPermission perm = await Geolocator.requestPermission();
     if (perm == LocationPermission.denied ||
         perm == LocationPermission.deniedForever) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Permission denied")),
-      );
+      _showSnack('Location permission denied');
       return;
     }
     final pos = await Geolocator.getCurrentPosition(
@@ -83,87 +109,177 @@ class _MapPageState extends State<MapPage> {
     _mapController.move(LatLng(pos.latitude, pos.longitude), 16);
   }
 
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Color _markerColor(String severity) {
     switch (severity.toLowerCase()) {
-      case "high":
+      case 'high':
+      case 'critical':
         return Colors.red.shade700;
-      case "moderate":
-      case "medium":
+      case 'moderate':
+      case 'medium':
         return Colors.orange.shade700;
       default:
         return Colors.green.shade600;
     }
   }
 
-  void _showPopup(dynamic d) {
-    showDialog(
+  void _showDetectionDetail(dynamic d) {
+    final color = _markerColor(d['severity'] ?? 'low');
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14)),
-        title: Row(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.warning_amber_rounded,
-                color: _markerColor(d["severity"] ?? "low")),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                d["disease"].toString(),
-                style: const TextStyle(fontSize: 16),
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
             ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _popupRow("Confidence", "${d["confidence"]}%"),
-            _popupRow("Severity", d["severity"] ?? "-"),
-            _popupRow("Latitude", "${d["lat"]}"),
-            _popupRow("Longitude", "${d["lon"]}"),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _green,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+            const SizedBox(height: 16),
+
+            // Disease name + severity
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    d['disease']?.toString() ?? 'Unknown',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: color.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    d['severity'] ?? '-',
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: const Text("Close"),
+
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
+
+            // Detail rows
+            _detailRow(Icons.percent, 'Confidence',
+                '${d['confidence'] ?? '-'}%'),
+            _detailRow(Icons.gps_fixed, 'Coordinates',
+                '${(d['lat'] as num).toStringAsFixed(4)}, '
+                '${(d['lon'] as num).toStringAsFixed(4)}'),
+            if (d['timestamp'] != null)
+              _detailRow(Icons.access_time, 'Detected',
+                  _formatTimestamp(d['timestamp'])),
+            if (d['source'] != null)
+              _detailRow(Icons.sensors, 'Source',
+                  _capitalise(d['source'])),
+
+            const SizedBox(height: 16),
+
+            // Confidence bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: (double.tryParse(
+                            d['confidence']?.toString() ?? '0') ??
+                        0) /
+                    100,
+                minHeight: 8,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Text('$label: ',
+              style: const TextStyle(
+                  fontSize: 13, color: Colors.grey)),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _popupRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Text("$label: ",
-              style: const TextStyle(
-                  color: Colors.grey, fontSize: 13)),
-          Text(value,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 13)),
-        ],
-      ),
-    );
+  String _formatTimestamp(dynamic ts) {
+    try {
+      final dt = DateTime.parse(ts.toString());
+      return '${dt.day} ${_monthName(dt.month)} ${dt.year}, '
+          '${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return ts.toString();
+    }
   }
 
+  String _monthName(int m) {
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return months[m];
+  }
+
+  String _capitalise(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
   List<Marker> _buildMarkers() {
-    return detections.map((d) {
-      final color = _markerColor(d["severity"] ?? "low");
+    return _filtered.map((d) {
+      final color = _markerColor(d['severity'] ?? 'low');
       return Marker(
-        width: 45,
-        height: 45,
-        point: LatLng(d["lat"], d["lon"]),
+        width: 44,
+        height: 44,
+        point: LatLng(
+            (d['lat'] as num).toDouble(),
+            (d['lon'] as num).toDouble()),
         child: GestureDetector(
-          onTap: () => _showPopup(d),
+          onTap: () => _showDetectionDetail(d),
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -171,12 +287,12 @@ class _MapPageState extends State<MapPage> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
+                  color: color.withOpacity(0.15),
                   shape: BoxShape.circle,
                   border: Border.all(color: color, width: 2),
                 ),
               ),
-              Icon(Icons.location_on, color: color, size: 24),
+              Icon(Icons.location_on, color: color, size: 22),
             ],
           ),
         ),
@@ -186,39 +302,52 @@ class _MapPageState extends State<MapPage> {
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filtered;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: _green,
         title: const Text(
-          "Disease Map",
+          'Disease Map',
           style: TextStyle(
               color: Colors.white, fontWeight: FontWeight.bold),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: () {
-              setState(() => loading = true);
-              _fetchMapData();
-            },
-          ),
+          if (_refreshing)
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              onPressed: () => _fetchMapData(isRefresh: true),
+            ),
         ],
       ),
+
       floatingActionButton: FloatingActionButton(
         backgroundColor: _green,
         onPressed: _locateMe,
         child: const Icon(Icons.my_location, color: Colors.white),
       ),
-      body: loading
+
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               children: [
+                // Map
                 FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
-                    initialCenter: initialCenter,
-                    initialZoom: initialZoom,
+                    initialCenter: _initialCenter,
+                    initialZoom: _initialZoom,
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all,
                     ),
@@ -226,7 +355,7 @@ class _MapPageState extends State<MapPage> {
                   children: [
                     TileLayer(
                       urlTemplate:
-                          "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName:
                           'com.example.wheat_disease_clean',
                       additionalOptions: const {
@@ -238,36 +367,144 @@ class _MapPageState extends State<MapPage> {
                   ],
                 ),
 
-                // Detection count badge
-                if (detections.isNotEmpty)
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        "${detections.length} Detections",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
+                // Severity filter bar
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 72,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ['All', 'High', 'Moderate', 'Low']
+                          .map((sev) => _filterPill(sev))
+                          .toList(),
                     ),
                   ),
+                ),
+
+                // Detection count + empty state
+                Positioned(
+                  bottom: 24,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: filtered.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      Colors.black.withOpacity(0.1),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              _severityFilter == 'All'
+                                  ? 'No detections yet'
+                                  : 'No $_severityFilter detections',
+                              style: const TextStyle(
+                                  fontSize: 13, color: Colors.grey),
+                            ),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _green,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      Colors.black.withOpacity(0.15),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.location_on,
+                                    color: Colors.white, size: 14),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${filtered.length} detection'
+                                  '${filtered.length != 1 ? 's' : ''}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (_severityFilter != 'All') ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '· $_severityFilter',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                  ),
+                ),
               ],
             ),
+    );
+  }
+
+  Widget _filterPill(String label) {
+    final isActive = _severityFilter == label;
+    Color pillColor;
+    switch (label) {
+      case 'High':
+        pillColor = Colors.red.shade700;
+        break;
+      case 'Moderate':
+        pillColor = Colors.orange.shade700;
+        break;
+      case 'Low':
+        pillColor = Colors.green.shade600;
+        break;
+      default:
+        pillColor = _green;
+    }
+
+    return GestureDetector(
+      onTap: () => setState(() => _severityFilter = label),
+      child: Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive ? pillColor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? pillColor : Colors.grey.shade300,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 4,
+            ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isActive ? Colors.white : Colors.grey.shade700,
+          ),
+        ),
+      ),
     );
   }
 }
