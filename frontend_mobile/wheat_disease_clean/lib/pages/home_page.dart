@@ -25,25 +25,103 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   File? _selectedImage;
   bool _loading = false;
+  String? _errorMessage;
 
-  static const _green = Color(0xFF2E7D32);
+  static const _green  = Color(0xFF2E7D32);
   static const _orange = Color(0xFFE65100);
-  static const _bg = Color(0xFFF1F8E9);
-
-  @override
-  void initState() {
-    super.initState();
-  }
+  static const _bg     = Color(0xFFF1F8E9);
 
   Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
+    final picked = await ImagePicker().pickImage(
       source: source,
       imageQuality: 85,
     );
     if (picked != null) {
-      setState(() => _selectedImage = File(picked.path));
+      setState(() {
+        _selectedImage = File(picked.path);
+        _errorMessage  = null;
+      });
     }
+  }
+
+  /// Gets GPS location with a clear permission flow and timeout.
+  /// Returns null and sets a user-friendly error message if it fails.
+  Future<Position?> _getLocation() async {
+    //  Check if GPS service is enabled at all
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() => _errorMessage =
+          'GPS is turned off. Please enable location in your phone settings.');
+      return null;
+    }
+
+    //  Check / request permission
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        setState(() => _errorMessage =
+            'Location permission denied. Please allow location access for WheatGuard.');
+        return null;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      setState(() => _errorMessage =
+          'Location permission is permanently denied. Please enable it in App Settings.');
+      _showOpenSettingsDialog();
+      return null;
+    }
+
+    //  Get position with a 15-second timeout
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('GPS timeout'),
+      );
+      return position;
+    } on Exception catch (e) {
+      final msg = e.toString().contains('timeout')
+          ? 'GPS is taking too long. Move to an open area and try again.'
+          : 'Could not get your location. Please try again.';
+      setState(() => _errorMessage = msg);
+      return null;
+    }
+  }
+
+  void _showOpenSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text('Location Permission Required'),
+        content: const Text(
+          'WheatGuard needs your location to map disease detections.\n\n'
+          'Please go to App Settings and allow location access.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Geolocator.openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _green,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _detectDisease() async {
@@ -52,13 +130,20 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    setState(() => _loading = true);
+    setState(() {
+      _loading      = true;
+      _errorMessage = null;
+    });
 
     try {
       final langCode = context.locale.languageCode;
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+
+      // Get location — if null, error message already set
+      final position = await _getLocation();
+      if (position == null) {
+        setState(() => _loading = false);
+        return;
+      }
 
       final result = await ApiService.predictDisease(
         _selectedImage!,
@@ -67,19 +152,31 @@ class _HomePageState extends State<HomePage> {
         position.longitude,
       );
 
+      // Check for API-level error
+      if (result.containsKey('error')) {
+        setState(() {
+          _loading      = false;
+          _errorMessage = result['error'].toString();
+        });
+        return;
+      }
+
+      // Save to local Hive history
       final box = Hive.box('predictions');
       final now = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
       box.add({
-        'imagePath': _selectedImage!.path,
-        'disease': result['disease'],
-        'confidence': result['confidence'],
-        'remedy': result['remedy'],
+        'imagePath':      _selectedImage!.path,
+        'disease':        result['disease'],
+        'confidence':     result['confidence'],
+        'severity':       result['severity'] ?? 'Low',
+        'remedy':         result['remedy'],
         'ai_explanation': result['ai_explanation'],
-        'timestamp': now,
-        'lat': position.latitude,
-        'lon': position.longitude,
-        'report_id': result['report_id'],
-        'synced': false,
+        'timestamp':      now,
+        'lat':            position.latitude,
+        'lon':            position.longitude,
+        'report_id':      result['report_id'],
+        'model_version':  result['model_version'] ?? '19-class-efficientnet-b3-onnx',
+        'synced':         true, // already saved to server by predict endpoint
       });
 
       if (!mounted) return;
@@ -88,9 +185,11 @@ class _HomePageState extends State<HomePage> {
         MaterialPageRoute(builder: (_) => ResultPage(result: result)),
       );
     } catch (e) {
-      _showSnack("Error: $e");
+      setState(() {
+        _errorMessage = 'Detection failed. Check your internet connection and try again.';
+      });
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -114,14 +213,51 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildImageCard(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // Error message with retry
+            if (_errorMessage != null) _buildErrorBanner(),
+
+            const SizedBox(height: 4),
             _buildDetectButton(),
             const SizedBox(height: 28),
-            _buildSectionTitle("Quick Actions"),
+            _buildSectionTitle('Quick Actions'),
             const SizedBox(height: 12),
             _buildActionsGrid(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade600, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.red.shade700,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _errorMessage = null),
+            child: Icon(Icons.close, size: 16, color: Colors.red.shade400),
+          ),
+        ],
       ),
     );
   }
@@ -204,7 +340,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          "Tap below to add image",
+                          'Tap below to add image',
                           style: TextStyle(
                             color: Colors.grey.shade500,
                             fontSize: 14,
@@ -280,7 +416,7 @@ class _HomePageState extends State<HomePage> {
               )
             : const Icon(Icons.search, size: 22),
         label: Text(
-          _loading ? "Analyzing..." : tr('detect_btn'),
+          _loading ? 'Analyzing...' : tr('detect_btn'),
           style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.bold,
@@ -346,7 +482,6 @@ class _HomePageState extends State<HomePage> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: item.color.withOpacity(0.3),
-            width: 1,
           ),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
