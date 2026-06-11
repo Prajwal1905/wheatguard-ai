@@ -1,14 +1,18 @@
-from fastapi import APIRouter, Depends
+# app/api/alerts.py
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.db.database import SessionLocal
 from app import crud, schemas
-
 from app.models.fcm_device import FCMDevice
+from app.models.alert import Alert
 from app.utils.socket_manager import broadcast_new_alert
 from app.utils.fcm_sender import send_fcm, haversine
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
+
 
 def get_db():
     db = SessionLocal()
@@ -17,78 +21,128 @@ def get_db():
     finally:
         db.close()
 
+
 @router.post("/", response_model=schemas.AlertResponse)
 async def create_alert(alert: schemas.AlertCreate, db: Session = Depends(get_db)):
-
-    
     saved = crud.create_alert(db, alert)
 
     await broadcast_new_alert({
-        "id": saved.id,
-        "disease": saved.disease,
-        "severity": saved.severity,
-        "cases": saved.cases,
-        "lat": saved.lat,
-        "lon": saved.lon,
-        "source": saved.source,
-        "timestamp": saved.created_at.isoformat()
+        "id":        saved.id,
+        "disease":   saved.disease,
+        "severity":  saved.severity,
+        "cases":     saved.cases,
+        "lat":       saved.lat,
+        "lon":       saved.lon,
+        "source":    saved.source,
+        "timestamp": saved.created_at.isoformat(),
     })
 
-    
+    # FCM push to farmers within 5km
     users = db.query(FCMDevice).all()
-
     for user in users:
         if user.lat is None or user.lon is None:
             continue
-
         dist = haversine(alert.lat, alert.lon, user.lat, user.lon)
-
-        if dist <= 5:  
+        if dist <= 5:
             send_fcm(
                 token=user.token,
                 title=f"Disease Alert: {alert.disease}",
                 body=f"{alert.severity} severity near your area ({dist:.1f} km)",
-                data={
-                    "lat": alert.lat,
-                    "lon": alert.lon,
-                    "disease": alert.disease
-                }
+                data={"lat": alert.lat, "lon": alert.lon, "disease": alert.disease},
             )
 
     return saved
 
+
 @router.get("/", response_model=list[schemas.AlertResponse])
-def list_alerts(db: Session = Depends(get_db)):
-    return crud.get_alerts(db)
+def list_alerts(
+    include_resolved: bool = False,
+    db: Session = Depends(get_db),
+):
+    
+    query = db.query(Alert)
+    if not include_resolved:
+        query = query.filter(Alert.is_resolved == False)
+    return query.order_by(Alert.created_at.desc()).all()
+
 
 @router.get("/nearby")
 def get_nearby_alerts(lat: float, lon: float, db: Session = Depends(get_db)):
-    alerts = crud.get_alerts(db)
-    nearby = []
-
     from math import radians, sin, cos, sqrt, atan2
     R = 6371
+
+    alerts = db.query(Alert).filter(Alert.is_resolved == False).all()
+    nearby = []
 
     for a in alerts:
         if a.lat is None or a.lon is None:
             continue
-
         dlat = radians(a.lat - lat)
         dlon = radians(a.lon - lon)
-
-        x = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(a.lat)) * sin(dlon/2)**2
-        distance = R * 2 * atan2(sqrt(x), sqrt(1-x))
+        x = sin(dlat / 2) ** 2 + cos(radians(lat)) * cos(radians(a.lat)) * sin(dlon / 2) ** 2
+        distance = R * 2 * atan2(sqrt(x), sqrt(1 - x))
 
         if distance <= 5:
             nearby.append({
-                "id": a.id,
-                "disease": a.disease,
-                "severity": a.severity,
-                "cases": a.cases,
-                "lat": a.lat,
-                "lon": a.lon,
-                "distance": round(distance, 2),
-                "timestamp": a.created_at.isoformat()
+                "id":        a.id,
+                "disease":   a.disease,
+                "severity":  a.severity,
+                "cases":     a.cases,
+                "lat":       a.lat,
+                "lon":       a.lon,
+                "distance":  round(distance, 2),
+                "timestamp": a.created_at.isoformat(),
             })
 
     return nearby
+
+
+@router.patch("/{alert_id}/resolve")
+def resolve_alert(alert_id: int, db: Session = Depends(get_db)):
+    
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    if alert.is_resolved:
+        return {"message": "Alert already resolved", "id": alert_id}
+
+    alert.is_resolved  = True
+    alert.resolved_at  = datetime.utcnow()
+    db.commit()
+    db.refresh(alert)
+
+    return {
+        "message":     "Alert resolved",
+        "id":          alert.id,
+        "resolved_at": alert.resolved_at.isoformat(),
+    }
+
+
+@router.patch("/{alert_id}/reopen")
+def reopen_alert(alert_id: int, db: Session = Depends(get_db)):
+    
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    alert.is_resolved = False
+    alert.resolved_at = None
+    db.commit()
+
+    return {"message": "Alert reopened", "id": alert.id}
+
+
+@router.delete("/{alert_id}")
+def delete_alert(alert_id: int, db: Session = Depends(get_db)):
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    db.delete(alert)
+    db.commit()
+
+    return {"message": "Alert deleted", "id": alert_id}
