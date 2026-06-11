@@ -11,6 +11,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.heat";
 import NdviTrendGraph from "./NdviTrendGraph";
+import DetectionDetailPanel from "./DetectionDetailPanel";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
@@ -109,6 +110,7 @@ export default function MapView({
   const [ndviOn, setNdviOn] = useState(true);
   const [clicked, setClicked] = useState(null);
   const [localCenter, setLocalCenter] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
 
   const center = forceCenter || localCenter;
 
@@ -134,7 +136,6 @@ export default function MapView({
 
   return (
     <div style={styles.root}>
-      {/* Search panel */}
       <div style={styles.searchPanel}>
         <div style={styles.searchTitle}>
           <i
@@ -168,7 +169,6 @@ export default function MapView({
         </button>
       </div>
 
-      {/* Layer toggles */}
       <div style={styles.layerPanel}>
         <ToggleBtn
           active={satellite}
@@ -189,6 +189,17 @@ export default function MapView({
           label={ndviOn ? "Hide NDVI" : "NDVI"}
         />
       </div>
+
+      {detections.length > 0 && (
+        <div style={styles.countBadge}>
+          <i
+            className="ti ti-map-pin"
+            style={{ fontSize: 12 }}
+            aria-hidden="true"
+          />
+          {detections.length} detections — click a marker for details
+        </div>
+      )}
 
       <MapContainer center={[20.5, 78.5]} zoom={6} style={styles.map}>
         {center && <FlyToLocation center={center} />}
@@ -244,6 +255,9 @@ export default function MapView({
               key={d.id || idx}
               position={[d.lat, d.lon]}
               icon={severityIcon(d.severity)}
+              eventHandlers={{
+                click: () => setSelectedId(d.id),
+              }}
             >
               <Popup>
                 <div style={{ fontSize: 12, lineHeight: 1.7 }}>
@@ -260,6 +274,18 @@ export default function MapView({
                   >
                     {d.lat?.toFixed(4)}, {d.lon?.toFixed(4)}
                   </span>
+                  <br />
+                  <button
+                    onClick={() => setSelectedId(d.id)}
+                    style={styles.detailBtn}
+                  >
+                    <i
+                      className="ti ti-external-link"
+                      style={{ fontSize: 11 }}
+                      aria-hidden="true"
+                    />
+                    View full details
+                  </button>
                 </div>
               </Popup>
             </Marker>
@@ -286,6 +312,13 @@ export default function MapView({
           </Marker>
         )}
       </MapContainer>
+
+      {selectedId && (
+        <DetectionDetailPanel
+          detectionId={selectedId}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -294,10 +327,7 @@ function ToggleBtn({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      style={{
-        ...toggleStyles.btn,
-        ...(active ? toggleStyles.active : {}),
-      }}
+      style={{ ...toggleStyles.btn, ...(active ? toggleStyles.active : {}) }}
     >
       <i className={`ti ${icon}`} style={{ fontSize: 13 }} aria-hidden="true" />
       {label}
@@ -336,10 +366,7 @@ const styles = {
     overflow: "hidden",
     border: "0.5px solid rgba(0,0,0,0.08)",
   },
-  map: {
-    height: "100%",
-    width: "100%",
-  },
+  map: { height: "100%", width: "100%" },
   searchPanel: {
     position: "absolute",
     top: 80,
@@ -395,5 +422,36 @@ const styles = {
     zIndex: 5000,
     display: "flex",
     gap: 6,
+  },
+  countBadge: {
+    position: "absolute",
+    bottom: 16,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 5000,
+    background: "rgba(0,0,0,0.65)",
+    color: "#fff",
+    fontSize: 12,
+    padding: "6px 14px",
+    borderRadius: 20,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    backdropFilter: "blur(4px)",
+    pointerEvents: "none",
+  },
+  detailBtn: {
+    marginTop: 6,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "4px 8px",
+    background: "#1B5E20",
+    color: "#fff",
+    border: "none",
+    borderRadius: 5,
+    fontSize: 11,
+    cursor: "pointer",
+    fontWeight: 500,
   },
 };
