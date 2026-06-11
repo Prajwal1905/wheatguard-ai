@@ -2,169 +2,206 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config.dart';
 
 class ApiService {
-  //static const String baseUrl = "http://10.239.104.35:8000";
-  //static String baseUrl = "http://127.0.0.1:8000";
-  // static const String baseUrl = "http://172.31.107.35:8000";
-
   static const String baseUrl = AppConfig.baseUrl;
+
+  // Token management 
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('auth_token');
+  }
+
+  static Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_token', token);
+  }
+
+  static Future<void> clearToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+  }
+
+  /// Returns headers with Authorization if a token is stored.
+  /// Public endpoints (predict, alerts/nearby, ai/*, sync, fcm) don't need it.
+  static Future<Map<String, String>> _authHeaders() async {
+    final token = await getToken();
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
+  // Disease detection 
   static Future<Map<String, dynamic>> predictDisease(
     File imageFile,
     String language,
     double lat,
     double lon,
   ) async {
-    var request = http.MultipartRequest(
+    final request = http.MultipartRequest(
       'POST',
       Uri.parse('$baseUrl/detections/predict'),
     );
 
     request.fields['language'] = language;
-    request.fields['lat'] = lat.toString();
-    request.fields['lon'] = lon.toString();
-
+    request.fields['lat']      = lat.toString();
+    request.fields['lon']      = lon.toString();
     request.files.add(
       await http.MultipartFile.fromPath('file', imageFile.path),
     );
 
-    var response = await request.send();
+    final response = await request.send();
 
     if (response.statusCode == 200) {
-      var res = await http.Response.fromStream(response);
+      final res = await http.Response.fromStream(response);
       return jsonDecode(res.body);
     } else {
-      throw Exception("Prediction failed: ${response.statusCode}");
+      throw Exception('Prediction failed: ${response.statusCode}');
     }
   }
 
+  //  Save detection
   static Future<void> saveDetection(Map<String, dynamic> data) async {
+    final headers = await _authHeaders();
     final response = await http.post(
       Uri.parse('$baseUrl/detections/save'),
-      headers: {'Content-Type': 'application/json'},
+      headers: headers,
       body: jsonEncode(data),
     );
-
     if (response.statusCode != 200) {
       throw Exception('Failed to save detection: ${response.statusCode}');
     }
   }
 
+  //  Map data
   static Future<List<dynamic>> getMapData() async {
-    final response = await http.get(Uri.parse('$baseUrl/detections/map_data'));
-
+    final headers = await _authHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/detections/map_data'),
+      headers: headers,
+    );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data.where((d) => d['lat'] != null && d['lon'] != null).toList();
+      return (data as List).where((d) =>
+        d['lat'] != null && d['lon'] != null
+      ).toList();
     } else {
-      throw Exception("Failed to load map data");
+      throw Exception('Failed to load map data: ${response.statusCode}');
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getAlerts() async {
-    final response = await http.get(Uri.parse('$baseUrl/alerts/'));
+  // ── Alerts ─────────────────────────────────────────────────────────────
 
+  static Future<List<Map<String, dynamic>>> getAlerts() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/alerts/nearby?lat=0&lon=0'),
+    );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-
       if (data is List) {
         return data
-            .map<Map<String, dynamic>>(
-              (e) => Map<String, dynamic>.from(e as Map),
-            )
+            .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
             .toList();
-      } else {
-        throw Exception("Unexpected alerts format");
       }
+      throw Exception('Unexpected alerts format');
     } else {
-      throw Exception("Failed to load alerts: ${response.statusCode}");
+      throw Exception('Failed to load alerts: ${response.statusCode}');
     }
   }
 
   static Future<List<dynamic>> getNearbyAlerts(double lat, double lon) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/map/nearby?lat=$lat&lon=$lon'),
+      Uri.parse('$baseUrl/alerts/nearby?lat=$lat&lon=$lon'),
     );
-
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return List<Map<String, dynamic>>.from(data);
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
     } else {
-      throw Exception("Failed to fetch nearby alerts");
+      throw Exception('Failed to fetch nearby alerts');
     }
   }
 
+  /// Chatbot is open  no token needed
   static Future<String> askChatbot(
     String disease,
     String question,
     String language,
   ) async {
     final body = {
-      "disease": disease,
-      "question": question,
-      "language": language,
+      'disease_name': disease,  
+      'question':     question,
+      'language':     language,
     };
 
     final response = await http.post(
       Uri.parse('$baseUrl/ai/chat'),
-      headers: {"Content-Type": "application/json"},
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body)['reply'] ?? "No reply";
+      return jsonDecode(response.body)['reply'] ?? 'No reply';
     } else {
-      return "AI unable to reply.";
+      return 'AI is unavailable right now. Please try again.';
     }
   }
 
-  static Future<bool> syncLocalDetection(Map data) async {
+  // Offline sync 
+  /// Sync is open — mobile syncs offline detections without needing to log in
+  static Future<bool> syncLocalDetection(Map<String, dynamic> data) async {
     try {
-      final res = await http.post(
-        Uri.parse("$baseUrl/sync/local-detection"),
-        headers: {"Content-Type": "application/json"},
+      final response = await http.post(
+        Uri.parse('$baseUrl/sync/local-detection'),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
-
-      return res.statusCode == 200;
+      return response.statusCode == 200;
     } catch (e) {
-      print("Sync error: $e");
+      debugPrint('Sync error: $e');
       return false;
     }
   }
 
+  //  Image upload 
   static Future<String?> uploadImage(File file) async {
-    final req = http.MultipartRequest(
-      "POST",
-      Uri.parse("$baseUrl/upload/image"),
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/upload/image'),
+    );
+    request.files.add(
+      await http.MultipartFile.fromPath('file', file.path),
     );
 
-    req.files.add(await http.MultipartFile.fromPath("file", file.path));
+    final response = await request.send();
+    final body     = await response.stream.bytesToString();
 
-    final res = await req.send();
-    final body = await res.stream.bytesToString();
-
-    if (res.statusCode == 200) {
-      final data = jsonDecode(body);
-      return data["url"];
-    } else {
-      print("Upload failed ${res.statusCode}");
-      print("Response: $body");
-      return null;
+    if (response.statusCode == 200) {
+      return jsonDecode(body)['url'];
     }
+    debugPrint('Upload failed ${response.statusCode}: $body');
+    return null;
   }
 
+  //  Delete detection
   static Future<void> deleteDetection(int reportId) async {
-    final res = await http.delete(Uri.parse("$baseUrl/detections/$reportId"));
-
-    if (res.statusCode != 200) {
-      throw Exception("Failed to delete: ${res.statusCode}");
+    final headers = await _authHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/detections/$reportId'),
+      headers: headers,
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete: ${response.statusCode}');
     }
   }
 
+  // FCM 
   static Future<String> getDeviceId() async {
-    final info = DeviceInfoPlugin();
+    final info    = DeviceInfoPlugin();
     final android = await info.androidInfo;
     return android.id;
   }
@@ -176,18 +213,21 @@ class ApiService {
     required double lon,
   }) async {
     final body = {
-      "device_id": deviceId,
-      "token": token,
-      "lat": lat,
-      "lon": lon,
+      'device_id': deviceId,
+      'token':     token,
+      'lat':       lat,
+      'lon':       lon,
     };
 
-    final res = await http.post(
-      Uri.parse("$baseUrl/fcm/register"),
-      headers: {"Content-Type": "application/json"},
+    final response = await http.post(
+      Uri.parse('$baseUrl/fcm/register'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
 
-    return res.statusCode == 200;
+    return response.statusCode == 200;
   }
 }
+
+// ignore: avoid_print
+void debugPrint(String msg) => print(msg);
