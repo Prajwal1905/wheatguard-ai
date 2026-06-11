@@ -6,6 +6,7 @@ import MapView from "../components/MapView";
 import StatsCards from "../components/StatsCards";
 import LiveFeedPanel from "../components/LiveFeedPanel";
 import DiseaseTrends from "../components/DiseaseTrends";
+import DailyTrendChart from "../components/DailyTrendChart";
 import toast from "react-hot-toast";
 
 export default function Dashboard() {
@@ -15,8 +16,8 @@ export default function Dashboard() {
 
   const [filters, setFilters] = useState({
     severity: "All",
-    disease: "All",
-    ndvi: "All",
+    disease:  "All",
+    ndvi:     "All",
   });
 
   const [ndviDate, setNdviDate] = useState("2024-11-14");
@@ -62,6 +63,7 @@ export default function Dashboard() {
 
   return (
     <div style={styles.layout}>
+     
       <div style={styles.main}>
         <div style={styles.pageHeader}>
           <div>
@@ -74,11 +76,14 @@ export default function Dashboard() {
             )}
           </div>
           <button onClick={fetchData} disabled={loading} style={styles.refreshBtn}>
-            <i className={`ti ti-refresh${loading ? " ti-spin" : ""}`} style={{ fontSize: 14 }} aria-hidden="true" />
+            <i className={`ti ${loading ? "ti-loader-2" : "ti-refresh"}`} style={{ fontSize: 14 }} aria-hidden="true" />
             {loading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
 
+        <StatsCards />
+
+       
         <div style={styles.filterBar}>
           <FilterSelect
             value={filters.severity}
@@ -86,10 +91,10 @@ export default function Dashboard() {
             icon="ti-alert-triangle"
             label="Severity"
             options={[
-              { value: "All", label: "All severities" },
-              { value: "High", label: "High" },
-              { value: "Medium", label: "Medium" },
-              { value: "Low", label: "Low" },
+              { value: "All",      label: "All severities" },
+              { value: "High",     label: "High" },
+              { value: "Medium",   label: "Medium" },
+              { value: "Low",      label: "Low" },
             ]}
           />
           <FilterSelect
@@ -108,8 +113,8 @@ export default function Dashboard() {
             icon="ti-leaf"
             label="NDVI"
             options={[
-              { value: "All", label: "NDVI: all" },
-              { value: "Healthy", label: "Healthy" },
+              { value: "All",      label: "NDVI: all" },
+              { value: "Healthy",  label: "Healthy" },
               { value: "Moderate", label: "Moderate" },
               { value: "Stressed", label: "Stressed" },
               { value: "Critical", label: "Critical" },
@@ -124,8 +129,7 @@ export default function Dashboard() {
           />
         </div>
 
-        <StatsCards detections={filteredDetections} />
-
+       
         <div style={styles.mapWrap}>
           <MapView
             detections={filteredDetections}
@@ -135,7 +139,9 @@ export default function Dashboard() {
         </div>
       </div>
 
+      
       <div style={styles.sidebar}>
+        <DailyTrendChart />
         <DiseaseTrends detections={filteredDetections} />
         <LiveFeedPanel detections={filteredDetections} />
       </div>
@@ -162,100 +168,20 @@ function FilterSelect({ value, onChange, icon, label, options }) {
 }
 
 const styles = {
-  layout: {
-    display: "grid",
-    gridTemplateColumns: "2fr 1fr",
-    gap: 20,
-    padding: 20,
-    color: "#1a1a1a",
-  },
-  main: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  sidebar: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  pageHeader: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 500,
-    color: "#1a1a1a",
-    margin: 0,
-  },
-  lastUpdated: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 4,
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  refreshBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "7px 13px",
-    background: "transparent",
-    border: "0.5px solid #d0d0d0",
-    borderRadius: 7,
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#444",
-    cursor: "pointer",
-  },
-  filterBar: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  dateInput: {
-    padding: "7px 10px",
-    borderRadius: 7,
-    border: "0.5px solid #d0d0d0",
-    fontSize: 13,
-    color: "#333",
-    background: "#fafafa",
-    outline: "none",
-    cursor: "pointer",
-  },
-  mapWrap: {
-    flex: 1,
-    minHeight: 420,
-    borderRadius: 12,
-    overflow: "hidden",
-    border: "0.5px solid rgba(0,0,0,0.08)",
-  },
+  layout:     { display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, padding: 20, color: "#1a1a1a" },
+  main:       { display: "flex", flexDirection: "column", gap: 16 },
+  sidebar:    { display: "flex", flexDirection: "column", gap: 16 },
+  pageHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between" },
+  title:      { fontSize: 20, fontWeight: 500, color: "#1a1a1a", margin: 0 },
+  lastUpdated:{ fontSize: 12, color: "#999", marginTop: 4, display: "flex", alignItems: "center", gap: 4 },
+  refreshBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", background: "transparent", border: "0.5px solid #d0d0d0", borderRadius: 7, fontSize: 13, fontWeight: 500, color: "#444", cursor: "pointer" },
+  filterBar:  { display: "flex", gap: 8, flexWrap: "wrap" },
+  dateInput:  { padding: "7px 10px", borderRadius: 7, border: "0.5px solid #d0d0d0", fontSize: 13, color: "#333", background: "#fafafa", outline: "none", cursor: "pointer" },
+  mapWrap:    { flex: 1, minHeight: 420, borderRadius: 12, overflow: "hidden", border: "0.5px solid rgba(0,0,0,0.08)" },
 };
 
 const filterStyles = {
-  wrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    background: "#fafafa",
-    border: "0.5px solid #d0d0d0",
-    borderRadius: 7,
-    padding: "0 8px",
-  },
-  icon: {
-    fontSize: 14,
-    color: "#999",
-  },
-  select: {
-    border: "none",
-    background: "transparent",
-    padding: "7px 4px",
-    fontSize: 13,
-    color: "#333",
-    cursor: "pointer",
-    outline: "none",
-  },
+  wrap:   { display: "flex", alignItems: "center", gap: 6, background: "#fafafa", border: "0.5px solid #d0d0d0", borderRadius: 7, padding: "0 8px" },
+  icon:   { fontSize: 14, color: "#999" },
+  select: { border: "none", background: "transparent", padding: "7px 4px", fontSize: 13, color: "#333", cursor: "pointer", outline: "none" },
 };
