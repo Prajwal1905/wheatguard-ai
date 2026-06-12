@@ -170,13 +170,21 @@ async def save_detection(
 def get_map_data(
     skip: int = 0,
     limit: int = 500,
+    include_resolved: bool = False,
     db: Session = Depends(get_db),
 ):
-    detections = (
+    
+    query = (
         db.query(Detection)
         .join(Report, Detection.report_id == Report.id)
         .filter(Report.lat.isnot(None), Report.lon.isnot(None))
-        .filter(Detection.is_resolved == False)  # resolved items hidden from map/alerts
+    )
+
+    if not include_resolved:
+        query = query.filter(Detection.is_resolved == False)
+
+    detections = (
+        query
         .order_by(Detection.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -185,14 +193,15 @@ def get_map_data(
 
     return [
         {
-            "id":         d.id,
-            "disease":    d.disease_label,
-            "confidence": round(float(d.confidence or 0), 2),
-            "severity":   d.severity,
-            "lat":        float(d.report.lat),
-            "lon":        float(d.report.lon),
-            "timestamp":  d.created_at.isoformat(),
-            "source":     d.report.source,
+            "id":          d.id,
+            "disease":     d.disease_label,
+            "confidence":  round(float(d.confidence or 0), 2),
+            "severity":    d.severity,
+            "lat":         float(d.report.lat),
+            "lon":         float(d.report.lon),
+            "timestamp":   d.created_at.isoformat(),
+            "source":      d.report.source,
+            "is_resolved": d.is_resolved,
         }
         for d in detections
     ]
@@ -235,7 +244,7 @@ def get_detection_detail(detection_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{detection_id}/resolve")
 def resolve_detection(detection_id: int, db: Session = Depends(get_db)):
-    
+   
     detection = db.query(Detection).filter(Detection.id == detection_id).first()
     if not detection:
         raise HTTPException(status_code=404, detail="Detection not found")
@@ -249,7 +258,7 @@ def resolve_detection(detection_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{detection_id}/reopen")
 def reopen_detection(detection_id: int, db: Session = Depends(get_db)):
-    """Undo a resolve — detection reappears on map/alerts."""
+    
     detection = db.query(Detection).filter(Detection.id == detection_id).first()
     if not detection:
         raise HTTPException(status_code=404, detail="Detection not found")

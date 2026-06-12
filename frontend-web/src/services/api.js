@@ -26,8 +26,10 @@ api.interceptors.response.use(
 );
 
 
-export const getMapData = async () => {
-  const res = await api.get("/detections/map_data");
+export const getMapData = async (includeResolved = false) => {
+  const res = await api.get(
+    `/detections/map_data${includeResolved ? "?include_resolved=true" : ""}`
+  );
   return res.data;
 };
 
@@ -42,7 +44,6 @@ export async function analyzeDroneImage(formData) {
   });
   return res.data;
 }
-
 export async function sendDroneAlert(detectionId) {
   const res = await api.post(`/drone/detections/${detectionId}/alert`);
   return res.data;
