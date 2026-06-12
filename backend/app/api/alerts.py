@@ -11,6 +11,8 @@ from app.models.alert import Alert
 from app.utils.socket_manager import broadcast_new_alert
 from app.utils.fcm_sender import send_fcm, haversine
 
+ALERT_RADIUS_KM = 2.0
+
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
 
@@ -20,6 +22,60 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+async def create_alert_internal(
+    db: Session,
+    disease: str,
+    severity: str,
+    lat: float,
+    lon: float,
+    cases: int = 1,
+    source: str = "mobile",
+):
+    """
+    Create an alert + broadcast + FCM push, callable directly from
+    other backend modules (e.g. detections.py for High-severity
+    mobile detections) without going through the HTTP route
+    (so no JWT needed for internal calls).
+    """
+    alert_data = schemas.AlertCreate(
+        disease=disease,
+        severity=severity,
+        cases=cases,
+        lat=lat,
+        lon=lon,
+        source=source,
+    )
+
+    saved = crud.create_alert(db, alert_data)
+
+    await broadcast_new_alert({
+        "id":        saved.id,
+        "disease":   saved.disease,
+        "severity":  saved.severity,
+        "cases":     saved.cases,
+        "lat":       saved.lat,
+        "lon":       saved.lon,
+        "source":    saved.source,
+        "timestamp": saved.created_at.isoformat(),
+    })
+
+    # FCM push to farmers within ALERT_RADIUS_KM
+    users = db.query(FCMDevice).all()
+    for user in users:
+        if user.lat is None or user.lon is None:
+            continue
+        dist = haversine(lat, lon, user.lat, user.lon)
+        if dist <= ALERT_RADIUS_KM:
+            send_fcm(
+                token=user.token,
+                title=f"Disease Alert: {disease}",
+                body=f"{severity} severity near your area ({dist:.1f} km)",
+                data={"lat": lat, "lon": lon, "disease": disease},
+            )
+
+    return saved
 
 
 @router.post("/", response_model=schemas.AlertResponse)
@@ -37,13 +93,13 @@ async def create_alert(alert: schemas.AlertCreate, db: Session = Depends(get_db)
         "timestamp": saved.created_at.isoformat(),
     })
 
-    # FCM push to farmers within 5km
+    # FCM push to farmers within ALERT_RADIUS_KM
     users = db.query(FCMDevice).all()
     for user in users:
         if user.lat is None or user.lon is None:
             continue
         dist = haversine(alert.lat, alert.lon, user.lat, user.lon)
-        if dist <= 5:
+        if dist <= ALERT_RADIUS_KM:
             send_fcm(
                 token=user.token,
                 title=f"Disease Alert: {alert.disease}",
@@ -59,7 +115,7 @@ def list_alerts(
     include_resolved: bool = False,
     db: Session = Depends(get_db),
 ):
-    
+
     query = db.query(Alert)
     if not include_resolved:
         query = query.filter(Alert.is_resolved == False)
@@ -82,7 +138,7 @@ def get_nearby_alerts(lat: float, lon: float, db: Session = Depends(get_db)):
         x = sin(dlat / 2) ** 2 + cos(radians(lat)) * cos(radians(a.lat)) * sin(dlon / 2) ** 2
         distance = R * 2 * atan2(sqrt(x), sqrt(1 - x))
 
-        if distance <= 5:
+        if distance <= ALERT_RADIUS_KM:
             nearby.append({
                 "id":        a.id,
                 "disease":   a.disease,
@@ -99,7 +155,7 @@ def get_nearby_alerts(lat: float, lon: float, db: Session = Depends(get_db)):
 
 @router.patch("/{alert_id}/resolve")
 def resolve_alert(alert_id: int, db: Session = Depends(get_db)):
-    
+
     alert = db.query(Alert).filter(Alert.id == alert_id).first()
 
     if not alert:
@@ -122,7 +178,7 @@ def resolve_alert(alert_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{alert_id}/reopen")
 def reopen_alert(alert_id: int, db: Session = Depends(get_db)):
-    
+
     alert = db.query(Alert).filter(Alert.id == alert_id).first()
 
     if not alert:

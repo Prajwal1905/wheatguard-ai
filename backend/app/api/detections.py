@@ -13,6 +13,7 @@ from app.utils.supabase_upload import upload_detection_image
 from app.ml.model_utils import predict_image
 from app.ml.ai_helper import get_short_remedy
 from app.utils.rate_limiter import rate_limit
+from app.api.alerts import create_alert_internal
 
 router = APIRouter(prefix="/detections", tags=["Detections"])
 
@@ -84,6 +85,21 @@ async def predict_disease(
             "bbox":          None,
             "model_version": "19-class-efficientnet-b3-onnx",
         })
+
+        # High-severity mobile detections trigger a nearby-farmer alert
+        if severity == "High" and disease != "Healthy":
+            try:
+                await create_alert_internal(
+                    db,
+                    disease=disease,
+                    severity=severity,
+                    lat=lat,
+                    lon=lon,
+                    cases=1,
+                    source="mobile",
+                )
+            except Exception as e:
+                print("Alert creation error:", e)
 
         return {
             "report_id":      report.id,
