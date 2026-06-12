@@ -38,14 +38,19 @@ export default function Alerts() {
     }
   }
 
-  async function handleResolve(alertId) {
+  async function handleResolve(currentTab, alertId) {
     setResolving(alertId);
     try {
-      await api.patch(`/alerts/${alertId}/resolve`);
-      toast.success("Alert marked as resolved");
+      const url =
+        currentTab === "stress"
+          ? `/api/ndvi/stress/${alertId}/resolve`
+          : `/detections/${alertId}/resolve`;
+
+      await api.patch(url);
+      toast.success("Marked as resolved");
       loadAlerts();
     } catch (e) {
-      toast.error("Failed to resolve alert");
+      toast.error("Failed to resolve");
     } finally {
       setResolving(null);
     }
@@ -84,20 +89,6 @@ export default function Alerts() {
           <p style={styles.subtitle}>Field detections and stress events</p>
         </div>
         <div style={styles.headerRight}>
-          <button
-            onClick={() => setShowResolved(!showResolved)}
-            style={{
-              ...styles.toggleResolved,
-              ...(showResolved ? styles.toggleResolvedActive : {}),
-            }}
-          >
-            <i
-              className="ti ti-circle-check"
-              style={{ fontSize: 13 }}
-              aria-hidden="true"
-            />
-            {showResolved ? "Hiding resolved" : "Show resolved"}
-          </button>
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
@@ -242,10 +233,10 @@ export default function Alerts() {
                         />
                         View
                       </button>
-                      {!a.is_resolved && tab !== "stress" && (
+                      {!a.is_resolved && (
                         <button
                           style={styles.resolveBtn}
-                          onClick={() => handleResolve(a.id)}
+                          onClick={() => handleResolve(tab, a.id)}
                           disabled={resolving === a.id}
                         >
                           <i
@@ -289,24 +280,6 @@ const styles = {
   title: { fontSize: 20, fontWeight: 500, color: "#1a1a1a", margin: 0 },
   subtitle: { fontSize: 13, color: "#888", marginTop: 3 },
   headerRight: { display: "flex", gap: 8, alignItems: "center" },
-  toggleResolved: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "7px 12px",
-    background: "transparent",
-    border: "0.5px solid #d0d0d0",
-    borderRadius: 7,
-    fontSize: 13,
-    fontWeight: 500,
-    color: "#666",
-    cursor: "pointer",
-  },
-  toggleResolvedActive: {
-    background: "#EAF3DE",
-    color: "#1B5E20",
-    borderColor: "#1B5E20",
-  },
   select: {
     padding: "7px 10px",
     borderRadius: 7,
