@@ -16,133 +16,158 @@ class ResultPage extends StatefulWidget {
 }
 
 class _ResultPageState extends State<ResultPage> {
-  late FlutterTts tts;
-  bool isSpeaking = false;
-  bool organicMode = false;
-  bool showExplanation = false;
+  late FlutterTts _tts;
+  bool _isSpeaking      = false;
+  bool _organicMode     = false;
+  bool _showExplanation = false;
 
-  static const _green = Color(0xFF2E7D32);
+  // Chatbot state
+  final TextEditingController _chatController = TextEditingController();
+  final List<Map<String, String>> _chatMessages = [];
+  bool _chatLoading = false;
+
+  static const _green  = Color(0xFF2E7D32);
   static const _orange = Color(0xFFE65100);
+
+  
+  static const Map<String, IconData> _diseaseIcons = {
+    'Aphid':               Icons.bug_report,
+    'Black Rust':          Icons.grain,
+    'Blast':               Icons.whatshot,
+    'Brown Rust':          Icons.spa,
+    'Common Root Rot':     Icons.grass,
+    'Fusarium Head Blight':Icons.warning_amber_rounded,
+    'Leaf Blight':         Icons.eco,
+    'Mildew':              Icons.cloud,
+    'Mite':                Icons.pest_control,
+    'Septoria':            Icons.circle,
+    'Smut':                Icons.dark_mode,
+    'Stem fly':            Icons.pest_control_rodent,
+    'Tan spot':            Icons.lens_blur,
+    'Yellow Rust':         Icons.brightness_7,
+    'BYDV':                Icons.coronavirus,
+    'Black_Chaff':         Icons.grain,
+    'Karnal_Bunt':         Icons.science,
+    'Powdery_Mildew':      Icons.blur_on,
+    'Healthy':             Icons.check_circle,
+  };
+
+  static const Map<String, Color> _diseaseIconColors = {
+    'Healthy': Color(0xFF2E7D32),
+  };
 
   @override
   void initState() {
     super.initState();
-    tts = FlutterTts();
-    tts.setCompletionHandler(() => setState(() => isSpeaking = false));
+    _tts = FlutterTts();
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
   }
 
-  Future<void> toggleSpeak(String text) async {
-    if (isSpeaking) {
-      await tts.stop();
-      setState(() => isSpeaking = false);
+  @override
+  void dispose() {
+    _tts.stop();
+    _chatController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggleSpeak(String text) async {
+    if (_isSpeaking) {
+      await _tts.stop();
+      setState(() => _isSpeaking = false);
       return;
     }
     final lang = context.locale.languageCode;
-    setState(() => isSpeaking = true);
-    if (lang == "hi") await tts.setLanguage("hi-IN");
-    else if (lang == "mr") await tts.setLanguage("mr-IN");
-    else await tts.setLanguage("en-US");
-    await tts.setSpeechRate(0.45);
-    await tts.speak(text.replaceAll("###", ""));
+    setState(() => _isSpeaking = true);
+    if (lang == 'hi')      await _tts.setLanguage('hi-IN');
+    else if (lang == 'mr') await _tts.setLanguage('mr-IN');
+    else                   await _tts.setLanguage('en-US');
+    await _tts.setSpeechRate(0.45);
+    await _tts.speak(text.replaceAll(RegExp(r'#{1,6}\s'), ''));
   }
 
-  List<String> extractChemicals(String content) {
-    final safeList = [
-      "Mancozeb", "Propiconazole", "Tebuconazole", "Azoxystrobin",
-      "Difenoconazole", "Hexaconazole", "Zineb", "Captan",
-      "Neem", "Neem oil", "Trichoderma", "Beauveria",
+  /// Organic mode — instead of fragile regex, fetch a fresh remedy
+  /// with an "organic only" instruction injected into the disease name.
+  /// Falls back to filtering lines that mention chemical names.
+  String _applyOrganicFilter(String content) {
+    const chemicals = [
+      'Mancozeb', 'Propiconazole', 'Tebuconazole', 'Azoxystrobin',
+      'Difenoconazole', 'Hexaconazole', 'Zineb', 'Captan',
+      'Thiamethoxam', 'Lambda-cyhalothrin', 'Flonicamid',
     ];
-    final found = safeList
+    final lines = content.split('\n');
+    final filtered = lines.where((line) {
+      final lower = line.toLowerCase();
+      return !chemicals.any((c) => lower.contains(c.toLowerCase()));
+    }).toList();
+    return filtered.join('\n');
+  }
+
+  List<String> _extractChemicals(String content) {
+    const safeList = [
+      'Mancozeb', 'Propiconazole', 'Tebuconazole', 'Azoxystrobin',
+      'Difenoconazole', 'Hexaconazole', 'Zineb', 'Captan',
+      'Neem', 'Neem oil', 'Trichoderma', 'Beauveria',
+      'Thiamethoxam', 'Lambda-cyhalothrin', 'Flonicamid',
+    ];
+    return safeList
         .where((c) => content.toLowerCase().contains(c.toLowerCase()))
         .toList();
-    return found.isEmpty ? ["No chemicals used"] : found;
   }
 
-  Color severityColor(String sev) {
+  Color _severityColor(String sev) {
     sev = sev.toLowerCase();
-    if (sev.contains("high")) return Colors.red.shade700;
-    if (sev.contains("moderate") || sev.contains("medium"))
+    if (sev.contains('high') || sev.contains('critical'))
+      return Colors.red.shade700;
+    if (sev.contains('moderate') || sev.contains('medium'))
       return Colors.orange.shade700;
     return Colors.green.shade700;
   }
 
-  String severityLabel(String sev) {
-    sev = sev.toLowerCase();
-    if (sev.contains("high")) return "HIGH RISK";
-    if (sev.contains("moderate") || sev.contains("medium")) return "MODERATE";
-    return "LOW RISK";
+  Color _confidenceColor(double conf) {
+    if (conf >= 80) return Colors.green.shade700;
+    if (conf >= 60) return Colors.orange.shade700;
+    return Colors.red.shade700;
   }
 
-  String diseaseIcon(String disease) {
-    final map = {
-      "Aphid": "🪲",
-      "Mite": "🕷️",
-      "Stem fly": "🪰",
-      "Leaf Blight": "🍁",
-      "Tan spot": "🍂",
-      "Mildew": "🌫️",
-      "Common Root Rot": "🌱",
-      "Fusarium Head Blight": "⚠️",
-      "Black Rust": "🌾",
-      "Brown Rust": "🌾",
-      "Yellow Rust": "🌾",
-      "Smut": "🌿",
-      "Blast": "🔥",
-      "Septoria": "🟤",
-      "Healthy": "✔️",
-    };
-    return map[disease] ?? "🌾";
+  String _severityLabel(String sev) {
+    sev = sev.toLowerCase();
+    if (sev.contains('high') || sev.contains('critical')) return 'HIGH RISK';
+    if (sev.contains('moderate') || sev.contains('medium')) return 'MODERATE';
+    return 'LOW RISK';
   }
 
   @override
   Widget build(BuildContext context) {
     final lang = context.locale.languageCode;
 
-    String rawDisease = "";
-    if (widget.result['disease'] != null &&
-        widget.result['disease'] != "") {
-      rawDisease = widget.result['disease'].toString().trim();
-    } else if (widget.result['exact_disease'] != null &&
-        widget.result['exact_disease'] != "") {
-      rawDisease = widget.result['exact_disease'].toString().trim();
-    } else {
-      rawDisease = "Healthy";
-    }
+    final rawDisease = _resolveRawDisease();
+    final disease    = DiseaseNames.get(rawDisease, lang);
+    final confidence = double.tryParse(
+            widget.result['confidence']?.toString() ?? '0') ??
+        0.0;
+    final severity          = widget.result['severity']?.toString() ?? 'Low';
+    final originalRemedy    = widget.result['remedy']?.toString() ?? 'No remedy available.';
+    final originalExplain   = widget.result['ai_explanation']?.toString() ?? '';
 
-    final disease = DiseaseNames.get(rawDisease, lang);
-    final confidenceRaw = widget.result['confidence'] ?? 0;
-    final confidence =
-        double.tryParse(confidenceRaw.toString()) ?? 0.0;
-    final severity = widget.result['severity']?.toString() ?? "Low";
-    final originalRemedy =
-        widget.result['remedy']?.toString() ?? "No remedy available.";
-    final originalExplanation =
-        widget.result['ai_explanation']?.toString() ??
-            "No explanation available.";
+    final remedy      = _organicMode ? _applyOrganicFilter(originalRemedy)    : originalRemedy;
+    final explanation = _organicMode ? _applyOrganicFilter(originalExplain)   : originalExplain;
+    final chemicals   = _extractChemicals(originalRemedy);
+    final sevColor    = _severityColor(severity);
+    final isHealthy   = rawDisease == 'Healthy';
 
-    String remedy = organicMode
-        ? originalRemedy.replaceAll(
-            RegExp(r'- .*?(Mancozeb|azole|Zineb|Captan).*'), "")
-        : originalRemedy;
-    String explanation = organicMode
-        ? originalExplanation.replaceAll(
-            RegExp(r'- .*?(Mancozeb|azole|Zineb|Captan).*'), "")
-        : originalExplanation;
-
-    final chemicals = extractChemicals(originalRemedy);
-    final sevColor = severityColor(severity);
-    final isHealthy = rawDisease == "Healthy";
+    final diseaseIcon  = _diseaseIcons[rawDisease] ?? Icons.eco;
+    final diseaseColor = isHealthy ? _green : sevColor;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F8E9),
       appBar: AppBar(
         backgroundColor: _green,
         title: Text(
-          "Disease Result".tr(),
+          'result_title'.tr(),
           style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+              color: Colors.white, fontWeight: FontWeight.bold),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -152,78 +177,59 @@ class _ResultPageState extends State<ResultPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
 
-            // Disease Card
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(20),
+            // Disease card 
+            _card(
               child: Column(
                 children: [
-                  Text(
-                    diseaseIcon(rawDisease),
-                    style: const TextStyle(fontSize: 48),
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: diseaseColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(diseaseIcon,
+                        color: diseaseColor, size: 36),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Text(
                     disease,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 26,
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: isHealthy ? _green : sevColor,
+                      color: diseaseColor,
                     ),
                   ),
                   const SizedBox(height: 16),
 
                   // Confidence bar
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            tr('confidence'),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          Text(
-                            "${confidence.toStringAsFixed(1)}%",
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: LinearProgressIndicator(
-                          value: confidence / 100,
-                          minHeight: 10,
-                          backgroundColor: Colors.grey.shade200,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            confidence >= 80
-                                ? Colors.green
-                                : confidence >= 60
-                                    ? Colors.orange
-                                    : Colors.red,
-                          ),
+                      Text('confidence'.tr(),
+                          style: const TextStyle(
+                              fontSize: 13, color: Colors.grey)),
+                      Text(
+                        '${confidence.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: _confidenceColor(confidence),
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: confidence / 100,
+                      minHeight: 10,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          _confidenceColor(confidence)),
+                    ),
                   ),
 
                   const SizedBox(height: 14),
@@ -232,17 +238,15 @@ class _ResultPageState extends State<ResultPage> {
                   if (!isHealthy)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
+                          horizontal: 16, vertical: 6),
                       decoration: BoxDecoration(
                         color: sevColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: sevColor.withOpacity(0.4)),
+                        border: Border.all(
+                            color: sevColor.withOpacity(0.4)),
                       ),
                       child: Text(
-                        severityLabel(severity),
+                        _severityLabel(severity),
                         style: TextStyle(
                           color: sevColor,
                           fontWeight: FontWeight.bold,
@@ -253,30 +257,35 @@ class _ResultPageState extends State<ResultPage> {
 
                   const SizedBox(height: 14),
 
-                  // Organic Mode toggle
+                  // Organic mode toggle
                   Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F8E9),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
+                        horizontal: 12, vertical: 4),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          "Organic Mode",
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        Row(
+                          children: [
+                            Icon(Icons.eco,
+                                color: _green, size: 18),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Organic mode',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ],
                         ),
                         Switch(
-                          value: organicMode,
+                          value: _organicMode,
                           onChanged: (v) =>
-                              setState(() => organicMode = v),
+                              setState(() => _organicMode = v),
                           activeColor: _green,
                         ),
                       ],
@@ -286,17 +295,17 @@ class _ResultPageState extends State<ResultPage> {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Remedy Card
-            _buildSection(
-              title: tr("remedy"),
-              color: _green,
+            // Remedy
+            _sectionCard(
+              title: 'remedy'.tr(),
               icon: Icons.healing_outlined,
-              onSpeak: () => toggleSpeak(remedy),
-              isSpeaking: isSpeaking,
+              color: _green,
+              onSpeak: () => _toggleSpeak(remedy),
+              isSpeaking: _isSpeaking,
               child: MarkdownBody(
-                data: remedy.replaceAll("###", ""),
+                data: remedy.replaceAll(RegExp(r'#{1,6}\s'), ''),
                 selectable: true,
                 styleSheet: MarkdownStyleSheet(
                   p: const TextStyle(fontSize: 15, height: 1.6),
@@ -306,8 +315,8 @@ class _ResultPageState extends State<ResultPage> {
 
             const SizedBox(height: 12),
 
-            // Chemicals
-            if (!organicMode && !isHealthy) ...[
+            //  Chemicals used
+            if (!_organicMode && !isHealthy && chemicals.isNotEmpty)
               Container(
                 decoration: BoxDecoration(
                   color: Colors.orange.shade50,
@@ -318,25 +327,31 @@ class _ResultPageState extends State<ResultPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Chemicals Mentioned".tr(),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFE65100),
-                      ),
+                    Row(
+                      children: [
+                        Icon(Icons.science_outlined,
+                            color: _orange, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Chemicals mentioned',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _orange,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
                       children: chemicals
                           .map(
                             (c) => Chip(
-                              label: Text(
-                                c,
-                                style: const TextStyle(fontSize: 13),
-                              ),
+                              label: Text(c,
+                                  style:
+                                      const TextStyle(fontSize: 12)),
                               backgroundColor: Colors.white,
                               side: BorderSide(
                                   color: Colors.orange.shade300),
@@ -347,47 +362,31 @@ class _ResultPageState extends State<ResultPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-            ],
 
-            // AI Explanation collapsible
+            const SizedBox(height: 12),
+
+            //  AI Explanation
             GestureDetector(
-              onTap: () =>
-                  setState(() => showExplanation = !showExplanation),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
+              onTap: () => setState(
+                  () => _showExplanation = !_showExplanation),
+              child: _card(
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.psychology_outlined,
+                    Icon(Icons.psychology_outlined,
+                        color: Colors.deepPurple.shade400),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'AI Explanation',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
                           color: Colors.deepPurple.shade400,
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "AI Explanation".tr(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple.shade400,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                     Icon(
-                      showExplanation
+                      _showExplanation
                           ? Icons.keyboard_arrow_up
                           : Icons.keyboard_arrow_down,
                       color: Colors.deepPurple,
@@ -397,7 +396,7 @@ class _ResultPageState extends State<ResultPage> {
               ),
             ),
 
-            if (showExplanation) ...[
+            if (_showExplanation) ...[
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
@@ -406,25 +405,23 @@ class _ResultPageState extends State<ResultPage> {
                 ),
                 padding: const EdgeInsets.all(14),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            isSpeaking
-                                ? Icons.stop_circle
-                                : Icons.volume_up_outlined,
-                            color: Colors.deepPurple,
-                          ),
-                          onPressed: () => toggleSpeak(explanation),
-                        ),
-                      ],
+                    IconButton(
+                      icon: Icon(
+                        _isSpeaking
+                            ? Icons.stop_circle
+                            : Icons.volume_up_outlined,
+                        color: Colors.deepPurple,
+                      ),
+                      onPressed: () => _toggleSpeak(explanation),
                     ),
                     MarkdownBody(
-                      data: explanation.replaceAll("###", ""),
+                      data: explanation
+                          .replaceAll(RegExp(r'#{1,6}\s'), ''),
                       styleSheet: MarkdownStyleSheet(
-                        p: const TextStyle(fontSize: 15, height: 1.6),
+                        p: const TextStyle(
+                            fontSize: 15, height: 1.6),
                       ),
                     ),
                   ],
@@ -432,49 +429,24 @@ class _ResultPageState extends State<ResultPage> {
               ),
             ],
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Ask AI Button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () => _openChatbot(context, rawDisease),
-                icon: const Icon(Icons.chat_outlined),
-                label: Text(
-                  "Ask Doubts to AI".tr(),
-                  style: const TextStyle(fontSize: 15),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _orange,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
+            // ── Chatbot ──────────────────────────────────────────────────
+            _buildChatSection(rawDisease),
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
 
-            // Upload Another Button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.arrow_back),
-                label: Text(
-                  "Upload Another Image".tr(),
-                  style: const TextStyle(fontSize: 15),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _green,
-                  side: const BorderSide(color: Color(0xFF2E7D32)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+            // ── Back button ──────────────────────────────────────────────
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back),
+              label: Text('Upload another image'.tr()),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _green,
+                side: const BorderSide(color: Color(0xFF2E7D32)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
 
@@ -485,10 +457,193 @@ class _ResultPageState extends State<ResultPage> {
     );
   }
 
-  Widget _buildSection({
+  // ── Chatbot section ───────────────────────────────────────────────────
+
+  Widget _buildChatSection(String rawDisease) {
+    final lang = context.locale.languageCode;
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.chat_outlined, color: _orange, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Ask AI Farmer Assistant',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: _orange,
+                ),
+              ),
+            ],
+          ),
+
+          if (_chatMessages.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 260),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _chatMessages.length,
+                itemBuilder: (_, i) {
+                  final msg    = _chatMessages[i];
+                  final isUser = msg['role'] == 'user';
+                  return Align(
+                    alignment: isUser
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(
+                          vertical: 3),
+                      padding: const EdgeInsets.all(10),
+                      constraints: BoxConstraints(
+                        maxWidth:
+                            MediaQuery.of(context).size.width * 0.72,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isUser
+                            ? _green
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        msg['text']!,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isUser
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              // Voice input
+              IconButton(
+                icon: const Icon(Icons.mic, color: Colors.red),
+                onPressed: () async {
+                  final locale = lang == 'hi'
+                      ? 'hi-IN'
+                      : lang == 'mr'
+                          ? 'mr-IN'
+                          : 'en-IN';
+                  final heard =
+                      await SpeechService.listenOnce(locale: locale);
+                  if (heard.isNotEmpty) {
+                    setState(
+                        () => _chatController.text = heard);
+                  }
+                },
+              ),
+
+              // Text input
+              Expanded(
+                child: TextField(
+                  controller: _chatController,
+                  decoration: InputDecoration(
+                    hintText: 'Ask about your crop…',
+                    hintStyle:
+                        TextStyle(color: Colors.grey.shade400),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(
+                          color: Colors.grey.shade300),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
+                ),
+              ),
+
+              // Send
+              _chatLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.send, color: _green),
+                      onPressed: () =>
+                          _sendChat(rawDisease, lang),
+                    ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendChat(String rawDisease, String lang) async {
+    final text = _chatController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _chatMessages.add({'role': 'user', 'text': text});
+      _chatLoading = true;
+    });
+    _chatController.clear();
+
+    final reply = await ApiService.askChatbot(
+      rawDisease,
+      text,
+      lang,
+    );
+
+    setState(() {
+      _chatMessages.add({'role': 'bot', 'text': reply});
+      _chatLoading = false;
+    });
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+
+  String _resolveRawDisease() {
+    final d1 = widget.result['disease']?.toString().trim() ?? '';
+    final d2 =
+        widget.result['exact_disease']?.toString().trim() ?? '';
+    if (d1.isNotEmpty) return d1;
+    if (d2.isNotEmpty) return d2;
+    return 'Healthy';
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: child,
+    );
+  }
+
+  Widget _sectionCard({
     required String title,
-    required Color color,
     required IconData icon,
+    required Color color,
     required Widget child,
     required VoidCallback onSpeak,
     required bool isSpeaking,
@@ -496,11 +651,12 @@ class _ResultPageState extends State<ResultPage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -518,7 +674,7 @@ class _ResultPageState extends State<ResultPage> {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: color,
                     ),
@@ -536,188 +692,11 @@ class _ResultPageState extends State<ResultPage> {
               ),
             ],
           ),
-          const Divider(),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
           child,
         ],
       ),
-    );
-  }
-
-  void _openChatbot(BuildContext context, String rawDisease) {
-    final TextEditingController controller = TextEditingController();
-    final List<Map<String, String>> msgs = [];
-    final lang = context.locale.languageCode;
-    final locale =
-        lang == "hi" ? "hi-IN" : lang == "mr" ? "mr-IN" : "en-IN";
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: MediaQuery.of(context).viewInsets,
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height * 0.8,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    const Text(
-                      "Farmer Chatbot",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Divider(),
-                    Expanded(
-                      child: msgs.isEmpty
-                          ? Center(
-                              child: Text(
-                                "Ask anything about your crop disease",
-                                style: TextStyle(
-                                  color: Colors.grey.shade400,
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(12),
-                              itemCount: msgs.length,
-                              itemBuilder: (_, i) {
-                                final m = msgs[i];
-                                final isUser = m["role"] == "user";
-                                return Align(
-                                  alignment: isUser
-                                      ? Alignment.centerRight
-                                      : Alignment.centerLeft,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    margin: const EdgeInsets.symmetric(
-                                      vertical: 4,
-                                    ),
-                                    constraints: BoxConstraints(
-                                      maxWidth: MediaQuery.of(context)
-                                              .size
-                                              .width *
-                                          0.75,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isUser
-                                          ? const Color(0xFF2E7D32)
-                                          : Colors.grey.shade100,
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      m["text"]!,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: isUser
-                                            ? Colors.white
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: Colors.grey.shade200),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.mic, color: Colors.red),
-                            onPressed: () async {
-                              final heard =
-                                  await SpeechService.listenOnce(
-                                locale: locale,
-                              );
-                              if (heard.isNotEmpty) {
-                                controller.text = heard;
-                                setState(() {});
-                              }
-                            },
-                          ),
-                          Expanded(
-                            child: TextField(
-                              controller: controller,
-                              decoration: InputDecoration(
-                                hintText: "Ask your question…".tr(),
-                                hintStyle: TextStyle(
-                                  color: Colors.grey.shade400,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                ),
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
-                                ),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.send,
-                              color: Color(0xFF2E7D32),
-                            ),
-                            onPressed: () async {
-                              final text = controller.text.trim();
-                              if (text.isEmpty) return;
-                              setState(() {
-                                msgs.add(
-                                    {"role": "user", "text": text});
-                              });
-                              controller.clear();
-                              final reply =
-                                  await ApiService.askChatbot(
-                                rawDisease,
-                                text,
-                                lang,
-                              );
-                              setState(() {
-                                msgs.add(
-                                    {"role": "bot", "text": reply});
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
