@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../services/api";
+import toast from "react-hot-toast";
 
 function severityStyle(sev) {
   if (sev === "High" || sev === "Critical") return { background: "#FCEBEB", color: "#A32D2D" };
@@ -13,10 +14,11 @@ function sourceLabel(src) {
   return { icon: "ti-user", label: "Manual" };
 }
 
-export default function DetectionDetailPanel({ detectionId, onClose }) {
+export default function DetectionDetailPanel({ detectionId, onClose, onResolved }) {
   const [detail,  setDetail]  = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     if (!detectionId) return;
@@ -38,6 +40,33 @@ export default function DetectionDetailPanel({ detectionId, onClose }) {
   if (!detectionId) return null;
 
   const src = detail ? sourceLabel(detail.source) : null;
+
+  async function handleResolveToggle() {
+    if (!detail) return;
+    setResolving(true);
+    const action = detail.is_resolved ? "reopen" : "resolve";
+    try {
+      await api.patch(`/detections/${detectionId}/${action}`);
+      toast.success(
+        action === "resolve"
+          ? "Marked as resolved — removed from map & alerts"
+          : "Reopened — visible on map & alerts again"
+      );
+      if (action === "resolve") {
+        // Resolved items disappear from map_data — close the panel
+        // and let the parent refresh its list.
+        onResolved?.();
+        onClose?.();
+      } else {
+        setDetail({ ...detail, is_resolved: false });
+        onResolved?.();
+      }
+    } catch {
+      toast.error(`Failed to ${action}`);
+    } finally {
+      setResolving(false);
+    }
+  }
 
   return (
     <>
@@ -98,6 +127,13 @@ export default function DetectionDetailPanel({ detectionId, onClose }) {
                   {detail.severity}
                 </span>
               </div>
+
+              {detail.is_resolved && (
+                <div style={styles.resolvedBanner}>
+                  <i className="ti ti-circle-check" style={{ fontSize: 13 }} aria-hidden="true" />
+                  This detection is marked as resolved
+                </div>
+              )}
 
               
               <div style={styles.metaGrid}>
@@ -171,6 +207,27 @@ export default function DetectionDetailPanel({ detectionId, onClose }) {
                   </div>
                 </div>
               )}
+
+              
+              <button
+                style={{
+                  ...styles.resolveBtn,
+                  ...(detail.is_resolved ? styles.reopenBtn : {}),
+                }}
+                onClick={handleResolveToggle}
+                disabled={resolving}
+              >
+                <i
+                  className={`ti ${resolving ? "ti-loader-2" : detail.is_resolved ? "ti-rotate" : "ti-circle-check"}`}
+                  style={{ fontSize: 14 }}
+                  aria-hidden="true"
+                />
+                {resolving
+                  ? "Working…"
+                  : detail.is_resolved
+                    ? "Reopen"
+                    : "Mark as resolved"}
+              </button>
 
               
               <div style={styles.modelInfo}>
@@ -319,6 +376,18 @@ const styles = {
     fontSize: 12,
     fontWeight: 500,
   },
+  resolvedBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#EAF3DE",
+    color: "#3B6D11",
+    fontSize: 12,
+    fontWeight: 500,
+    padding: "8px 10px",
+    borderRadius: 8,
+    marginBottom: 12,
+  },
   metaGrid: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
@@ -378,6 +447,27 @@ const styles = {
     color: "#333",
     lineHeight: 1.6,
     margin: 0,
+  },
+  resolveBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: "100%",
+    padding: "10px 0",
+    background: "#1B5E20",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    marginBottom: 12,
+  },
+  reopenBtn: {
+    background: "#fff",
+    color: "#1B5E20",
+    border: "0.5px solid #1B5E20",
   },
   modelInfo: {
     display: "flex",
