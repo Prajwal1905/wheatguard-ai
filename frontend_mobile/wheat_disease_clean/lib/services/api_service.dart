@@ -8,7 +8,7 @@ import '../config.dart';
 class ApiService {
   static const String baseUrl = AppConfig.baseUrl;
 
-  // Token management 
+  // Token management
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('auth_token');
@@ -25,8 +25,7 @@ class ApiService {
   }
 
   /// Returns headers with Authorization if a token is stored.
-  /// Public endpoints (predict, alerts/nearby, ai/*, sync, fcm) don't need it.
-  static Future<Map<String, String>> _authHeaders() async {
+  static Future<Map<String, String>> authHeaders() async {
     final token = await getToken();
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -37,7 +36,7 @@ class ApiService {
     return headers;
   }
 
-  // Disease detection 
+  // Disease detection
   static Future<Map<String, dynamic>> predictDisease(
     File imageFile,
     String language,
@@ -49,9 +48,12 @@ class ApiService {
       Uri.parse('$baseUrl/detections/predict'),
     );
 
-    request.fields['language'] = language;
-    request.fields['lat']      = lat.toString();
-    request.fields['lon']      = lon.toString();
+    final deviceId = await getDeviceId();
+
+    request.fields['language']  = language;
+    request.fields['lat']       = lat.toString();
+    request.fields['lon']       = lon.toString();
+    request.fields['device_id'] = deviceId;
     request.files.add(
       await http.MultipartFile.fromPath('file', imageFile.path),
     );
@@ -66,9 +68,9 @@ class ApiService {
     }
   }
 
-  //  Save detection
+  // Save detection
   static Future<void> saveDetection(Map<String, dynamic> data) async {
-    final headers = await _authHeaders();
+    final headers = await authHeaders();
     final response = await http.post(
       Uri.parse('$baseUrl/detections/save'),
       headers: headers,
@@ -79,9 +81,9 @@ class ApiService {
     }
   }
 
-  //  Map data
+  // Map data
   static Future<List<dynamic>> getMapData() async {
-    final headers = await _authHeaders();
+    final headers = await authHeaders();
     final response = await http.get(
       Uri.parse('$baseUrl/detections/map_data'),
       headers: headers,
@@ -96,8 +98,7 @@ class ApiService {
     }
   }
 
-  // ── Alerts ─────────────────────────────────────────────────────────────
-
+  // Alerts
   static Future<List<Map<String, dynamic>>> getAlerts() async {
     final response = await http.get(
       Uri.parse('$baseUrl/alerts/nearby?lat=0&lon=0'),
@@ -126,16 +127,16 @@ class ApiService {
     }
   }
 
-  /// Chatbot is open  no token needed
+  /// Chatbot is open — no token needed
   static Future<String> askChatbot(
     String disease,
     String question,
     String language,
   ) async {
     final body = {
-      'disease_name': disease,  
-      'question':     question,
-      'language':     language,
+      'disease':  disease,   // fixed: backend ChatRequest expects "disease"
+      'question': question,
+      'language': language,
     };
 
     final response = await http.post(
@@ -151,8 +152,7 @@ class ApiService {
     }
   }
 
-  // Offline sync 
-  /// Sync is open — mobile syncs offline detections without needing to log in
+  // Offline sync — open
   static Future<bool> syncLocalDetection(Map<String, dynamic> data) async {
     try {
       final response = await http.post(
@@ -162,12 +162,12 @@ class ApiService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('Sync error: $e');
+      print('Sync error: $e');
       return false;
     }
   }
 
-  //  Image upload 
+  // Image upload
   static Future<String?> uploadImage(File file) async {
     final request = http.MultipartRequest(
       'POST',
@@ -183,23 +183,25 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(body)['url'];
     }
-    debugPrint('Upload failed ${response.statusCode}: $body');
+    print('Upload failed ${response.statusCode}: $body');
     return null;
   }
 
-  //  Delete detection
+  // Delete detection
   static Future<void> deleteDetection(int reportId) async {
-    final headers = await _authHeaders();
+    final deviceId = await getDeviceId();
     final response = await http.delete(
-      Uri.parse('$baseUrl/detections/$reportId'),
-      headers: headers,
+      Uri.parse('$baseUrl/detections/$reportId?device_id=$deviceId'),
     );
+    if (response.statusCode == 403) {
+      throw Exception('You can only delete detections from your own device.');
+    }
     if (response.statusCode != 200) {
       throw Exception('Failed to delete: ${response.statusCode}');
     }
   }
 
-  // FCM 
+  // FCM
   static Future<String> getDeviceId() async {
     final info    = DeviceInfoPlugin();
     final android = await info.androidInfo;
@@ -228,6 +230,3 @@ class ApiService {
     return response.statusCode == 200;
   }
 }
-
-// ignore: avoid_print
-void debugPrint(String msg) => print(msg);
