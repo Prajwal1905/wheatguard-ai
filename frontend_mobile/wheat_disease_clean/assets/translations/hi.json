@@ -91,8 +91,17 @@
   "Ask Doubts to AI": "AI से सवाल पूछें",
   "Upload Another Image": "दूसरी तस्वीर अपलोड करें",
   "search_disease": "रोग खोजें...",
-  "no_alerts_found": "कोई अलर्ट नहीं मिला"
-  
+  "no_alerts_found": "कोई अलर्ट नहीं मिला",
+  "result_title": "रोग परिणाम",
+  "map_coordinates": "स्थान निर्देशांक",
+  "map_detected": "पहचाना गया",
+  "map_source": "स्रोत",
+  "severity_high": "उच्च",
+  "severity_moderate": "मध्यम",
+  "severity_low": "कम",
+  "source_mobile": "मोबाइल",
+  "source_drone": "ड्रोन",
+  "source_manual": "मैनुअल"
 
 
   

@@ -16,6 +16,7 @@
   "cancel": "Cancel",
   "close": "Close",
   "All": "All",
+  "result_title": "Disease Result",
   "Recent": "Recent",
   "High Confidence": "High Confidence",
   "export_pdf": "Export PDF",
@@ -90,7 +91,16 @@
   "Ask Doubts to AI": "Ask Doubts to AI",
   "Upload Another Image": "Upload Another Image",
   "search_disease": "Search disease...",
-  "no_alerts_found": "No alerts found"
+  "no_alerts_found": "No alerts found",
+  "map_coordinates": "Coordinates",
+  "map_detected": "Detected",
+  "map_source": "Source",
+  "severity_high": "High",
+  "severity_moderate": "Moderate",
+  "severity_low": "Low",
+  "source_mobile": "Mobile",
+  "source_drone": "Drone",
+  "source_manual": "Manual"
   
 
 

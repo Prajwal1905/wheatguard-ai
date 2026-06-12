@@ -4,7 +4,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../services/api_service.dart';
+import '../utils/disease_names.dart';
 
 class MapPage extends StatefulWidget {
   final double? focusLat;
@@ -59,7 +61,7 @@ class _MapPageState extends State<MapPage> {
     }
 
     try {
-      final headers = await ApiService._authHeaders();
+      final headers = await ApiService.authHeaders();
       final url     = Uri.parse('${ApiService.baseUrl}/detections/map_data');
       final res     = await http.get(url, headers: headers);
 
@@ -129,6 +131,11 @@ class _MapPageState extends State<MapPage> {
 
   void _showDetectionDetail(dynamic d) {
     final color = _markerColor(d['severity'] ?? 'low');
+    final lang  = context.locale.languageCode;
+
+    final rawDisease     = d['disease']?.toString() ?? 'Unknown';
+    final translatedName = DiseaseNames.get(rawDisease, lang);
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -158,7 +165,7 @@ class _MapPageState extends State<MapPage> {
               children: [
                 Expanded(
                   child: Text(
-                    d['disease']?.toString() ?? 'Unknown',
+                    translatedName,
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -174,7 +181,7 @@ class _MapPageState extends State<MapPage> {
                     border: Border.all(color: color.withOpacity(0.4)),
                   ),
                   child: Text(
-                    d['severity'] ?? '-',
+                    _translateSeverity(d['severity'] ?? 'low'),
                     style: TextStyle(
                       color: color,
                       fontWeight: FontWeight.bold,
@@ -190,17 +197,17 @@ class _MapPageState extends State<MapPage> {
             const SizedBox(height: 14),
 
             // Detail rows
-            _detailRow(Icons.percent, 'Confidence',
+            _detailRow(Icons.percent, tr('confidence'),
                 '${d['confidence'] ?? '-'}%'),
-            _detailRow(Icons.gps_fixed, 'Coordinates',
+            _detailRow(Icons.gps_fixed, tr('map_coordinates'),
                 '${(d['lat'] as num).toStringAsFixed(4)}, '
                 '${(d['lon'] as num).toStringAsFixed(4)}'),
             if (d['timestamp'] != null)
-              _detailRow(Icons.access_time, 'Detected',
+              _detailRow(Icons.access_time, tr('map_detected'),
                   _formatTimestamp(d['timestamp'])),
             if (d['source'] != null)
-              _detailRow(Icons.sensors, 'Source',
-                  _capitalise(d['source'])),
+              _detailRow(Icons.sensors, tr('map_source'),
+                  _translateSource(d['source'])),
 
             const SizedBox(height: 16),
 
@@ -268,6 +275,34 @@ class _MapPageState extends State<MapPage> {
 
   String _capitalise(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  String _translateSeverity(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'high':
+      case 'critical':
+        return tr('severity_high');
+      case 'moderate':
+      case 'medium':
+        return tr('severity_moderate');
+      case 'low':
+        return tr('severity_low');
+      default:
+        return severity;
+    }
+  }
+
+  String _translateSource(String source) {
+    switch (source.toLowerCase()) {
+      case 'mobile':
+        return tr('source_mobile');
+      case 'drone':
+        return tr('source_drone');
+      case 'manual':
+        return tr('source_manual');
+      default:
+        return _capitalise(source);
+    }
+  }
 
   List<Marker> _buildMarkers() {
     return _filtered.map((d) {
