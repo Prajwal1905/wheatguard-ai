@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey,Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
 from sqlalchemy.orm import relationship
@@ -17,3 +17,5 @@ class Detection(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     report = relationship("Report", back_populates="detections")
+    is_resolved = Column(Boolean, default=False, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
