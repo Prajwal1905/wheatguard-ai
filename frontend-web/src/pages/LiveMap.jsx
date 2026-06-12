@@ -137,6 +137,7 @@ export default function LiveMap() {
         detections={filtered}
         fields={fields}
         forceCenter={locatePoint}
+        onDataChange={loadAllData}
       />
     </div>
   );
