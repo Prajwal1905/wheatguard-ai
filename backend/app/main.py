@@ -92,6 +92,7 @@ OPEN_PREFIXES = (
    
     "/detections/predict",
     "/detections/save",
+    "/detections/map_data", 
     "/sync/local-detection",
 
     "/ai/remedy",
@@ -114,6 +115,7 @@ OPEN_PREFIXES = (
     "/uploads",
 
     "/fields/photo",
+    "/fields/", 
 )
 
 _login_attempts: dict = defaultdict(list)
