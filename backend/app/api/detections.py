@@ -1,6 +1,6 @@
 # app/api/detections.py
 
-from fastapi import APIRouter, Depends, File, UploadFile, Form, Body, HTTPException
+from fastapi import APIRouter, Depends, File, UploadFile, Form, Body, HTTPException, Request
 from sqlalchemy.orm import Session
 import uuid
 
@@ -12,6 +12,7 @@ from app.utils.socket_manager import broadcast_new_detection
 from app.utils.supabase_upload import upload_detection_image
 from app.ml.model_utils import predict_image
 from app.ml.ai_helper import get_short_remedy
+from app.utils.rate_limiter import rate_limit
 
 router = APIRouter(prefix="/detections", tags=["Detections"])
 
@@ -34,12 +35,16 @@ def calculate_severity(confidence: float) -> str:
 
 @router.post("/predict")
 async def predict_disease(
+    request: Request,
     file: UploadFile = File(...),
     language: str = Form("en"),
     lat: float = Form(...),
     lon: float = Form(...),
+    device_id: str = Form(None),  # device that captured this — used for ownership
     db: Session = Depends(get_db),
 ):
+    # 10 predictions per minute per IP
+    rate_limit(request, max_requests=10, window_seconds=60)
     try:
         image_bytes = await file.read()
         if not image_bytes:
@@ -60,7 +65,13 @@ async def predict_disease(
         remedy      = result["remedy"]
         explanation = result["ai_explanation"]
 
-        report = Report(source="mobile", image_url=image_url, lat=lat, lon=lon)
+        report = Report(
+            source="mobile",
+            image_url=image_url,
+            lat=lat,
+            lon=lon,
+            device_id=device_id,
+        )
         db.add(report)
         db.commit()
         db.refresh(report)
@@ -99,12 +110,14 @@ async def save_detection(
         lat        = payload.get("lat")
         lon        = payload.get("lon")
         confidence = float(payload.get("confidence", 0))
+        device_id  = payload.get("device_id")
 
         report = Report(
             source="mobile",
             image_url=payload.get("image_url"),
             lat=lat,
             lon=lon,
+            device_id=device_id,
         )
         db.add(report)
         db.commit()
@@ -169,7 +182,7 @@ def get_map_data(
 
 @router.get("/{detection_id}")
 def get_detection_detail(detection_id: int, db: Session = Depends(get_db)):
-    
+
     detection = db.query(Detection).filter(Detection.id == detection_id).first()
 
     if not detection:
@@ -181,10 +194,15 @@ def get_detection_detail(detection_id: int, db: Session = Depends(get_db)):
     except Exception:
         pass
 
+    conf = float(detection.confidence or 0)
+    # Handle both 0-1 and 0-100 scale data (older test records)
+    if conf <= 1:
+        conf = conf * 100
+
     return {
         "id":            detection.id,
         "disease":       detection.disease_label,
-        "confidence":    round(float(detection.confidence or 0), 2),
+        "confidence":    round(conf, 2),
         "severity":      detection.severity,
         "model_version": detection.model_version,
         "timestamp":     detection.created_at.isoformat(),
@@ -197,12 +215,41 @@ def get_detection_detail(detection_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{report_id}")
-def delete_detection(report_id: int, db: Session = Depends(get_db)):
+def delete_detection(
+    report_id: int,
+    device_id: str = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a detection + its report.
+
+    Ownership check: the requesting device_id must match the
+    device_id stored on the report when it was created.
+
+    Backward compatibility: reports created before device_id was
+    tracked (device_id is NULL) can be deleted by anyone — these are
+    old test records and the column didn't exist when they were made.
+    """
     try:
+        report = db.query(Report).filter(Report.id == report_id).first()
+
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Ownership check — only enforced if the report has a device_id
+        if report.device_id is not None and report.device_id != device_id:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only delete detections from your own device.",
+            )
+
         db.query(Detection).filter(Detection.report_id == report_id).delete()
         db.query(Report).filter(Report.id == report_id).delete()
         db.commit()
         return {"message": "deleted"}
+
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         return {"error": str(e)}
