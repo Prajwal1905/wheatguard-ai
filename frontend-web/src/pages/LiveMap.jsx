@@ -10,7 +10,6 @@ export default function LiveMap() {
   const [detections, setDetections] = useState([]);
   const [fields, setFields] = useState([]);
   const [filters, setFilters] = useState({ severity: "All", disease: "All" });
-  const [polygonMode, setPolygonMode] = useState(false);
   const [locatePoint, setLocatePoint] = useState(null);
 
   useEffect(() => {
@@ -132,21 +131,11 @@ export default function LiveMap() {
           <i className="ti ti-refresh" style={{ fontSize: 14 }} aria-hidden="true" />
           Refresh
         </button>
-
-        <button
-          onClick={() => setPolygonMode(!polygonMode)}
-          style={polygonMode ? { ...styles.btnGhost, ...styles.btnActive } : styles.btnGhost}
-          aria-pressed={polygonMode}
-        >
-          <i className="ti ti-vector-triangle" style={{ fontSize: 14 }} aria-hidden="true" />
-          {polygonMode ? "Drawing field…" : "Draw field"}
-        </button>
       </div>
 
       <MapView
         detections={filtered}
         fields={fields}
-        polygonMode={polygonMode}
         forceCenter={locatePoint}
       />
     </div>
@@ -217,10 +206,5 @@ const styles = {
     fontWeight: 500,
     color: "#444",
     cursor: "pointer",
-  },
-  btnActive: {
-    background: "#1B5E20",
-    color: "#fff",
-    borderColor: "#1B5E20",
   },
 };

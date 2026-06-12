@@ -48,7 +48,6 @@ function parseLatLon(input) {
   if (!isNaN(parseFloat(cleaned))) return parseFloat(cleaned);
   return null;
 }
-
 async function fetchNdvi(lat, lon) {
   try {
     const res = await fetch(
@@ -108,11 +107,11 @@ function HeatLayer({ points }) {
       max: 1.0,
       minOpacity: 0.5,
       gradient: {
-        0.0: "#2b6cb0", // blue  - low severity
-        0.3: "#38a169", // green
-        0.5: "#ecc94b", // yellow
-        0.7: "#ed8936", // orange
-        1.0: "#e53e3e", // red   - high severity
+        0.0: "#2b6cb0",  // blue  - low severity
+        0.3: "#38a169",  // green
+        0.5: "#ecc94b",  // yellow
+        0.7: "#ed8936",  // orange
+        1.0: "#e53e3e",  // red   - high severity
       },
     }).addTo(map);
     return () => map.removeLayer(layer);
@@ -122,7 +121,10 @@ function HeatLayer({ points }) {
 
 function polygonCentroid(poly) {
   const n = poly.length;
-  const sum = poly.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1]], [0, 0]);
+  const sum = poly.reduce(
+    (acc, p) => [acc[0] + p[0], acc[1] + p[1]],
+    [0, 0],
+  );
   return [sum[0] / n, sum[1] / n];
 }
 
@@ -178,9 +180,7 @@ function FieldNdviLayer({ fields, onSelect }) {
     <>
       {fields.map((f) => {
         if (!f.polygon) return null;
-        const poly = Array.isArray(f.polygon)
-          ? f.polygon
-          : JSON.parse(f.polygon);
+        const poly = Array.isArray(f.polygon) ? f.polygon : JSON.parse(f.polygon);
         if (poly.length < 3) return null;
 
         const centroid = polygonCentroid(poly);
@@ -231,9 +231,7 @@ function FieldNdviLayer({ fields, onSelect }) {
           >
             <Popup>
               <div style={{ fontSize: 12 }}>
-                <strong>
-                  Field #{f.id} — {f.village}
-                </strong>
+                <strong>Field #{f.id} — {f.village}</strong>
                 <br />
                 {loading
                   ? "Loading NDVI…"
@@ -248,6 +246,7 @@ function FieldNdviLayer({ fields, onSelect }) {
     </>
   );
 }
+
 
 function FlyToLocation({ center, onArrive }) {
   const map = useMap();
@@ -268,7 +267,6 @@ function FlyToLocation({ center, onArrive }) {
 export default function MapView({
   detections = [],
   fields = [],
-  polygonMode = false,
   forceCenter = null,
 }) {
   const [latInput, setLatInput] = useState("");
@@ -346,11 +344,7 @@ export default function MapView({
 
       <div style={styles.layerPanel}>
         <div style={styles.layerPanelLabel}>
-          <i
-            className="ti ti-layers-intersect"
-            style={{ fontSize: 12 }}
-            aria-hidden="true"
-          />
+          <i className="ti ti-layers-intersect" style={{ fontSize: 12 }} aria-hidden="true" />
           Layers
         </div>
         <div style={styles.layerPanelGroup}>
@@ -485,8 +479,7 @@ export default function MapView({
             <Popup minWidth={220}>
               <div style={{ fontSize: 12 }}>
                 <strong>
-                  NDVI:{" "}
-                  {typeof clicked.ndvi === "number"
+                  NDVI: {typeof clicked.ndvi === "number"
                     ? clicked.ndvi.toFixed(3)
                     : clicked.ndvi}
                 </strong>
@@ -521,7 +514,8 @@ export default function MapView({
           </Marker>
         )}
 
-        {(clicked?.status === "unavailable" || clicked?.status === "error") && (
+        {(clicked?.status === "unavailable" ||
+          clicked?.status === "error") && (
           <Marker position={[clicked.lat, clicked.lon]}>
             <Popup minWidth={220}>
               <div style={{ fontSize: 12 }}>
@@ -578,11 +572,7 @@ function LayerToggle({ active, onClick, icon, label, hint }) {
           ...(active ? layerStyles.toggleIconActive : {}),
         }}
       >
-        <i
-          className={`ti ${icon}`}
-          style={{ fontSize: 14 }}
-          aria-hidden="true"
-        />
+        <i className={`ti ${icon}`} style={{ fontSize: 14 }} aria-hidden="true" />
       </div>
       <div style={layerStyles.toggleText}>
         <div style={layerStyles.toggleLabel}>{label}</div>
