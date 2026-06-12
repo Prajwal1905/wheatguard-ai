@@ -48,6 +48,7 @@ function parseLatLon(input) {
   if (!isNaN(parseFloat(cleaned))) return parseFloat(cleaned);
   return null;
 }
+
 async function fetchNdvi(lat, lon) {
   try {
     const res = await fetch(
@@ -247,7 +248,6 @@ function FieldNdviLayer({ fields, onSelect }) {
   );
 }
 
-
 function FlyToLocation({ center, onArrive }) {
   const map = useMap();
   useEffect(() => {
@@ -268,6 +268,7 @@ export default function MapView({
   detections = [],
   fields = [],
   forceCenter = null,
+  onDataChange = null,  // called after a detection is resolved/reopened
 }) {
   const [latInput, setLatInput] = useState("");
   const [lonInput, setLonInput] = useState("");
@@ -540,6 +541,7 @@ export default function MapView({
         <DetectionDetailPanel
           detectionId={selectedId}
           onClose={() => setSelectedId(null)}
+          onResolved={onDataChange}
         />
       )}
     </div>
