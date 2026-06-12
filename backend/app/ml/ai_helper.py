@@ -197,6 +197,11 @@ def get_short_remedy(disease_name: str, language: str = "en") -> str:
     display_name = _get_display_disease_name(disease_name, language)
 
     prompt = f"""
+IMPORTANT: Write your ENTIRE response in {lang_full} only.
+Do not use English words except for fungicide/insecticide names from the lists below.
+If {lang_full} is Hindi, write in Devanagari script.
+If {lang_full} is Marathi, write in Devanagari script (Marathi).
+
 You are a Krishi Vaidya (agri doctor) helping Indian wheat farmers.
 
 Write 3–4 VERY SIMPLE bullet points to control this wheat problem.
@@ -247,14 +252,14 @@ FORMAT:
 - ONLY bullet points (• or -).
 - No headings, no long paragraphs.
 
-Language: {lang_full}
+REMINDER: Your entire response must be in {lang_full}. Not English.
 """
 
     try:
         resp = client.chat.completions.create(
-            model="x-ai/grok-4-fast",
+            model="x-ai/grok-4.3",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=700,
+            max_tokens=500,
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
@@ -268,36 +273,69 @@ def get_remedy_explanation(disease_name: str, language: str = "en") -> str:
 
     display_name = _get_display_disease_name(disease_name, language)
 
+    # Section headers translated so the whole response matches the language
+    headers = {
+        "en": {
+            "what":    "### What is this disease?",
+            "why":     f"### Why does it happen? (Season: {season})",
+            "symptoms":"### Early symptoms farmers can notice",
+            "danger":  "### Is it dangerous right now?",
+            "do_now":  "### What farmers should do now?",
+            "prevent": "### How to prevent it next time?",
+        },
+        "hi": {
+            "what":    "### यह बीमारी क्या है?",
+            "why":     f"### यह क्यों होती है? (मौसम: {season})",
+            "symptoms":"### शुरुआती लक्षण किसान कैसे पहचानें",
+            "danger":  "### क्या अभी यह खतरनाक है?",
+            "do_now":  "### किसान अभी क्या करें?",
+            "prevent": "### आगे इससे कैसे बचें?",
+        },
+        "mr": {
+            "what":    "### हा रोग काय आहे?",
+            "why":     f"### हा का होतो? (हंगाम: {season})",
+            "symptoms":"### सुरुवातीची लक्षणे शेतकरी कशी ओळखतील",
+            "danger":  "### सध्या हे धोकादायक आहे का?",
+            "do_now":  "### शेतकऱ्यांनी आता काय करावे?",
+            "prevent": "### पुढच्या वेळी हे कसे टाळावे?",
+        },
+    }
+    h = headers.get(language, headers["en"])
+
     prompt = f"""
+IMPORTANT: Write your ENTIRE response in {lang_full} only.
+Do not use English words except for fungicide/insecticide names from the lists below.
+If {lang_full} is Hindi or Marathi, write in Devanagari script.
+Use the EXACT section headers given below — do not translate them yourself,
+just write the content under each in {lang_full}.
+
 Explain this wheat problem for an Indian farmer.
 
 Disease (farmer name): **{display_name}**
 Season now: {season}
 
-Write answer ONLY in very simple {lang_full}.  
-Do NOT mix English with local language except medicine names.
 Do NOT mention dose, ml/litre, grams or exact spray schedule.
 
-You MUST follow this structure:
+You MUST follow this structure using these EXACT headers:
 
-### What is this disease?
+{h['what']}
 - 2–3 very simple lines.
 - No scientific language.
 
-### Why does it happen? (Season: {season})
+{h['why']}
 - 2–3 simple points.
 - Mention weather/season and management mistakes only if relevant.
 
-### Early symptoms farmers can notice
+{h['symptoms']}
 - 3–5 bullet points.
 - Describe what they SEE on leaf, stem or grain.
 
-### Is it dangerous right now?
+{h['danger']}
 - 2–3 lines:
   - clearly say if it is serious or mild in current season,
   - no panic, but honest warning if it spreads fast.
 
-### What farmers should do now?
+{h['do_now']}
 - 3–6 clear steps.
 - Include a mix of:
   - cultural practices (removing diseased parts, proper spacing, irrigation, clean field),
@@ -331,7 +369,7 @@ You MUST warn:
 - no random mixing of many chemicals,
 - follow local agriculture officer / label instructions.
 
-### How to prevent it next time?
+{h['prevent']}
 - 3–5 bullets.
 - Mention seed treatment (without exact dose), crop rotation, proper irrigation, sowing time, resistant varieties (if relevant).
 
@@ -341,14 +379,14 @@ Tone:
 - No banned chemicals.
 - No heavy technical words.
 
-Language: {lang_full}
+REMINDER: Your entire response must be in {lang_full}. Not English. Use the section headers exactly as given above.
 """
 
     try:
         resp = client.chat.completions.create(
-            model="x-ai/grok-4-fast",
+            model="x-ai/grok-4.3",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1400,
+            max_tokens=900,
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
@@ -358,13 +396,9 @@ Language: {lang_full}
 
 def get_farmer_chat_reply(
     question: str,
-    disease_name: Optional[str] = None,
+    disease_name=None,
     language: str = "en",
 ) -> str:
-    """
-    Chatbot used on ResultPage.
-    Farmer can ask doubt in EN/HI/MR. Answer in same language.
-    """
     lang_full = LANG_MAP.get(language, "English")
     season = _current_season_india()
 
@@ -375,14 +409,20 @@ def get_farmer_chat_reply(
         disease_text = "wheat crop problem"
 
     prompt = f"""
+IMPORTANT: Write your ENTIRE response in {lang_full} only.
+Do not use English words except for fungicide/insecticide names from the lists below.
+If {lang_full} is Hindi or Marathi, write in Devanagari script.
+
 You are an AI Krishi Sevak helping Indian wheat farmers.
 
 Farmer question (in {lang_full}):
-\"\"\"{question}\"\"\" 
+\"\"\"{question}\"\"\"
 
 Context:
 - Detected problem: {disease_text}
 - Season now: {season}
+- This disease was ALREADY detected by the app. Do NOT ask the farmer
+  to identify the disease again — answer directly about {disease_text}.
 
 Answer requirements:
 - Reply in very simple {lang_full}, like talking to a small / marginal farmer.
@@ -421,14 +461,14 @@ ALWAYS:
 - Be calm and encouraging.
 - Remind: no overdose, no random mixing, and follow local Krishi Sevak / agriculture officer.
 
-Language: {lang_full}
+REMINDER: Your entire response must be in {lang_full}. Not English.
 """
 
     try:
         resp = client.chat.completions.create(
-            model="x-ai/grok-4-fast",
+            model="x-ai/grok-4.3",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=900,
+            max_tokens=400,
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
