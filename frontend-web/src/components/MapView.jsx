@@ -6,6 +6,7 @@ import {
   Popup,
   Polygon,
   useMapEvents,
+  useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -48,27 +49,49 @@ function parseLatLon(input) {
   return null;
 }
 
+async function fetchNdvi(lat, lon) {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/sentinel_ndvi_value?lat=${lat}&lon=${lon}`,
+    );
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return {
+        status: "unavailable",
+        lat,
+        lon,
+        message:
+          body.detail ||
+          "No satellite data available for this location right now.",
+      };
+    }
+
+    const data = await res.json();
+    return {
+      status: "ok",
+      lat,
+      lon,
+      ndvi: data.ndvi,
+      statusText: data.status,
+    };
+  } catch {
+    return {
+      status: "error",
+      lat,
+      lon,
+      message: "Could not reach the satellite data service.",
+    };
+  }
+}
+
 function ClickNDVI({ setClicked }) {
   useMapEvents({
     click: async (e) => {
       const { lat, lng } = e.latlng;
       setClicked({ status: "loading", lat, lon: lng });
-      try {
-        const res = await fetch(
-          `${API_BASE}/api/sentinel_ndvi_value?lat=${lat}&lon=${lng}`,
-        );
-        const data = await res.json();
-        setClicked({
-          status: "ok",
-          lat,
-          lon: lng,
-          ndvi: data.ndvi,
-          statusText: data.status,
-          date_used: data.date,
-        });
-      } catch {
-        setClicked({ status: "error", lat, lon: lng });
-      }
+      const result = await fetchNdvi(lat, lng);
+      setClicked(result);
     },
   });
   return null;
@@ -79,21 +102,166 @@ function HeatLayer({ points }) {
   useEffect(() => {
     if (!points?.length) return;
     const layer = L.heatLayer(points, {
-      radius: 55,
-      blur: 15,
-      maxZoom: 17,
-      max: 3,
+      radius: 35,
+      blur: 25,
+      maxZoom: 12,
+      max: 1.0,
+      minOpacity: 0.5,
+      gradient: {
+        0.0: "#2b6cb0", // blue  - low severity
+        0.3: "#38a169", // green
+        0.5: "#ecc94b", // yellow
+        0.7: "#ed8936", // orange
+        1.0: "#e53e3e", // red   - high severity
+      },
     }).addTo(map);
     return () => map.removeLayer(layer);
   }, [points, map]);
   return null;
 }
 
-function FlyToLocation({ center }) {
-  const map = useMapEvents({});
+function polygonCentroid(poly) {
+  const n = poly.length;
+  const sum = poly.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1]], [0, 0]);
+  return [sum[0] / n, sum[1] / n];
+}
+
+const ndviColor = (status) => {
+  if (status === "Healthy") return "#1B5E20";
+  if (status === "Stressed") return "#E65100";
+  if (status === "Critical") return "#A32D2D";
+  return "#999"; // no data
+};
+
+function FieldNdviLayer({ fields, onSelect }) {
+  const [fieldNdvi, setFieldNdvi] = useState({});
+
   useEffect(() => {
-    if (center) map.flyTo([center.lat, center.lon], 16, { duration: 1.2 });
-  }, [center, map]);
+    let cancelled = false;
+
+    fields.forEach(async (f) => {
+      if (!f.polygon) return;
+      const poly = Array.isArray(f.polygon) ? f.polygon : JSON.parse(f.polygon);
+      if (poly.length < 3) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/sentinel_ndvi_polygon`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            geometry: {
+              // GeoJSON expects [lon, lat]
+              coordinates: [poly.map((p) => [p[1], p[0]])],
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!cancelled) {
+          setFieldNdvi((prev) => ({ ...prev, [f.id]: data }));
+        }
+      } catch {
+        if (!cancelled) {
+          setFieldNdvi((prev) => ({
+            ...prev,
+            [f.id]: { average_ndvi: null, status: "no data" },
+          }));
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fields]);
+
+  return (
+    <>
+      {fields.map((f) => {
+        if (!f.polygon) return null;
+        const poly = Array.isArray(f.polygon)
+          ? f.polygon
+          : JSON.parse(f.polygon);
+        if (poly.length < 3) return null;
+
+        const centroid = polygonCentroid(poly);
+        const ndviData = fieldNdvi[f.id];
+        const loading = !ndviData;
+        const status = ndviData?.status;
+        const value = ndviData?.average_ndvi;
+
+        return (
+          <Marker
+            key={`ndvi-${f.id}`}
+            position={centroid}
+            icon={L.divIcon({
+              className: "",
+              html: `<div style="
+                width: 28px; height: 28px; border-radius: 50%;
+                background: ${loading ? "#ccc" : ndviColor(status)};
+                border: 3px solid white;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+                display:flex; align-items:center; justify-content:center;
+                color:white; font-size:10px; font-weight:600;
+              ">${loading ? "…" : (value ?? "-")}</div>`,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+            })}
+            eventHandlers={{
+              click: () => {
+                if (ndviData?.average_ndvi != null) {
+                  onSelect({
+                    status: "ok",
+                    lat: centroid[0],
+                    lon: centroid[1],
+                    ndvi: ndviData.average_ndvi,
+                    statusText: ndviData.status,
+                  });
+                } else {
+                  onSelect({
+                    status: "unavailable",
+                    lat: centroid[0],
+                    lon: centroid[1],
+                    message:
+                      ndviData?.message ||
+                      "No cloud-free imagery available for this field.",
+                  });
+                }
+              },
+            }}
+          >
+            <Popup>
+              <div style={{ fontSize: 12 }}>
+                <strong>
+                  Field #{f.id} — {f.village}
+                </strong>
+                <br />
+                {loading
+                  ? "Loading NDVI…"
+                  : value != null
+                    ? `NDVI: ${value} (${status})`
+                    : "No satellite data available"}
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </>
+  );
+}
+
+function FlyToLocation({ center, onArrive }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!center) return;
+    map.flyTo([center.lat, center.lon], 16, { duration: 1.2 });
+
+    const timer = setTimeout(() => {
+      onArrive?.(center.lat, center.lon);
+    }, 1300);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center]);
   return null;
 }
 
@@ -122,6 +290,13 @@ export default function MapView({
       return;
     }
     setLocalCenter({ lat, lon });
+  };
+
+  // Called once the map finishes flying to the searched location
+  const handleArrive = async (lat, lon) => {
+    setClicked({ status: "loading", lat, lon });
+    const result = await fetchNdvi(lat, lon);
+    setClicked(result);
   };
 
   const heatPoints = detections.map((d) => [
@@ -170,23 +345,42 @@ export default function MapView({
       </div>
 
       <div style={styles.layerPanel}>
-        <ToggleBtn
-          active={satellite}
-          onClick={() => setSatellite(!satellite)}
-          icon={satellite ? "ti-map-2" : "ti-satellite"}
-          label={satellite ? "Map" : "Satellite"}
-        />
-        <ToggleBtn
+        <div style={styles.layerPanelLabel}>
+          <i
+            className="ti ti-layers-intersect"
+            style={{ fontSize: 12 }}
+            aria-hidden="true"
+          />
+          Layers
+        </div>
+        <div style={styles.layerPanelGroup}>
+          <LayerOption
+            active={!satellite}
+            onClick={() => setSatellite(false)}
+            icon="ti-map-2"
+            label="Map"
+          />
+          <LayerOption
+            active={satellite}
+            onClick={() => setSatellite(true)}
+            icon="ti-satellite"
+            label="Satellite"
+          />
+        </div>
+        <div style={styles.layerPanelDivider} />
+        <LayerToggle
           active={heatmap}
           onClick={() => setHeatmap(!heatmap)}
           icon="ti-flame"
-          label={heatmap ? "Markers" : "Heatmap"}
+          label="Heatmap"
+          hint="Detection density"
         />
-        <ToggleBtn
+        <LayerToggle
           active={ndviOn}
           onClick={() => setNdviOn(!ndviOn)}
           icon="ti-leaf"
-          label={ndviOn ? "Hide NDVI" : "NDVI"}
+          label="Field NDVI"
+          hint="Crop health from satellite"
         />
       </div>
 
@@ -202,7 +396,7 @@ export default function MapView({
       )}
 
       <MapContainer center={[20.5, 78.5]} zoom={6} style={styles.map}>
-        {center && <FlyToLocation center={center} />}
+        {center && <FlyToLocation center={center} onArrive={handleArrive} />}
 
         <TileLayer
           url={
@@ -212,14 +406,9 @@ export default function MapView({
           }
         />
 
-        {ndviOn && (
-          <TileLayer
-            url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_NDVI/default/2024-01-01/GoogleMapsCompatible/{z}/{y}/{x}.png"
-            opacity={0.55}
-          />
-        )}
-
         {heatmap && <HeatLayer points={heatPoints} />}
+
+        {ndviOn && <FieldNdviLayer fields={fields} onSelect={setClicked} />}
 
         <ClickNDVI setClicked={setClicked} />
 
@@ -295,9 +484,26 @@ export default function MapView({
           <Marker position={[clicked.lat, clicked.lon]}>
             <Popup minWidth={220}>
               <div style={{ fontSize: 12 }}>
-                <strong>NDVI: {clicked.ndvi}</strong>
+                <strong>
+                  NDVI:{" "}
+                  {typeof clicked.ndvi === "number"
+                    ? clicked.ndvi.toFixed(3)
+                    : clicked.ndvi}
+                </strong>
                 <br />
-                <span style={{ color: "#666" }}>{clicked.statusText}</span>
+                <span
+                  style={{
+                    color:
+                      clicked.statusText === "Healthy"
+                        ? "#1B5E20"
+                        : clicked.statusText === "Stressed"
+                          ? "#E65100"
+                          : "#A32D2D",
+                    fontWeight: 500,
+                  }}
+                >
+                  {clicked.statusText}
+                </span>
                 <NdviTrendGraph lat={clicked.lat} lon={clicked.lon} />
               </div>
             </Popup>
@@ -307,7 +513,30 @@ export default function MapView({
         {clicked?.status === "loading" && (
           <Marker position={[clicked.lat, clicked.lon]}>
             <Popup>
-              <span style={{ fontSize: 12 }}>Loading NDVI…</span>
+              <span style={{ fontSize: 12 }}>
+                <i className="ti ti-loader-2" aria-hidden="true" /> Fetching
+                satellite data…
+              </span>
+            </Popup>
+          </Marker>
+        )}
+
+        {(clicked?.status === "unavailable" || clicked?.status === "error") && (
+          <Marker position={[clicked.lat, clicked.lon]}>
+            <Popup minWidth={220}>
+              <div style={{ fontSize: 12 }}>
+                <strong style={{ color: "#A32D2D" }}>
+                  <i
+                    className="ti ti-cloud-off"
+                    aria-hidden="true"
+                    style={{ marginRight: 4 }}
+                  />
+                  NDVI unavailable
+                </strong>
+                <p style={{ color: "#666", marginTop: 6, marginBottom: 0 }}>
+                  {clicked.message}
+                </p>
+              </div>
             </Popup>
           </Marker>
         )}
@@ -323,11 +552,15 @@ export default function MapView({
   );
 }
 
-function ToggleBtn({ active, onClick, icon, label }) {
+/** Segmented control option — e.g. Map vs Satellite (mutually exclusive) */
+function LayerOption({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      style={{ ...toggleStyles.btn, ...(active ? toggleStyles.active : {}) }}
+      style={{
+        ...layerStyles.option,
+        ...(active ? layerStyles.optionActive : {}),
+      }}
     >
       <i className={`ti ${icon}`} style={{ fontSize: 13 }} aria-hidden="true" />
       {label}
@@ -335,25 +568,127 @@ function ToggleBtn({ active, onClick, icon, label }) {
   );
 }
 
-const toggleStyles = {
-  btn: {
+/** Independent toggle — e.g. Heatmap, Field NDVI (each can be on/off) */
+function LayerToggle({ active, onClick, icon, label, hint }) {
+  return (
+    <button onClick={onClick} style={layerStyles.toggleRow}>
+      <div
+        style={{
+          ...layerStyles.toggleIcon,
+          ...(active ? layerStyles.toggleIconActive : {}),
+        }}
+      >
+        <i
+          className={`ti ${icon}`}
+          style={{ fontSize: 14 }}
+          aria-hidden="true"
+        />
+      </div>
+      <div style={layerStyles.toggleText}>
+        <div style={layerStyles.toggleLabel}>{label}</div>
+        <div style={layerStyles.toggleHint}>{hint}</div>
+      </div>
+      <div
+        style={{
+          ...layerStyles.switchTrack,
+          ...(active ? layerStyles.switchTrackActive : {}),
+        }}
+      >
+        <div
+          style={{
+            ...layerStyles.switchThumb,
+            ...(active ? layerStyles.switchThumbActive : {}),
+          }}
+        />
+      </div>
+    </button>
+  );
+}
+
+const layerStyles = {
+  option: {
+    flex: 1,
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
-    padding: "6px 10px",
-    background: "#fff",
-    border: "0.5px solid rgba(0,0,0,0.15)",
-    borderRadius: 7,
+    padding: "6px 0",
+    background: "transparent",
+    border: "none",
+    borderRadius: 6,
     fontSize: 12,
     fontWeight: 500,
-    color: "#444",
+    color: "#777",
     cursor: "pointer",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
   },
-  active: {
+  optionActive: {
     background: "#1B5E20",
     color: "#fff",
-    borderColor: "#1B5E20",
+  },
+  toggleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: "6px 4px",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  toggleIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    background: "#f2f2f2",
+    color: "#999",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  toggleIconActive: {
+    background: "#E8F0E3",
+    color: "#1B5E20",
+  },
+  toggleText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  toggleLabel: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#333",
+  },
+  toggleHint: {
+    fontSize: 10,
+    color: "#999",
+    marginTop: 1,
+  },
+  switchTrack: {
+    width: 28,
+    height: 16,
+    borderRadius: 10,
+    background: "#d9d9d9",
+    position: "relative",
+    flexShrink: 0,
+    transition: "background 0.15s",
+  },
+  switchTrackActive: {
+    background: "#1B5E20",
+  },
+  switchThumb: {
+    position: "absolute",
+    top: 2,
+    left: 2,
+    width: 12,
+    height: 12,
+    borderRadius: "50%",
+    background: "#fff",
+    transition: "left 0.15s",
+  },
+  switchThumbActive: {
+    left: 14,
   },
 };
 
@@ -369,7 +704,7 @@ const styles = {
   map: { height: "100%", width: "100%" },
   searchPanel: {
     position: "absolute",
-    top: 80,
+    top: 100,
     left: 10,
     zIndex: 5000,
     background: "#fff",
@@ -420,8 +755,35 @@ const styles = {
     top: 12,
     right: 12,
     zIndex: 5000,
+    background: "#fff",
+    borderRadius: 10,
+    padding: 10,
+    width: 180,
+    boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+    border: "0.5px solid rgba(0,0,0,0.08)",
+  },
+  layerPanelLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: "#999",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
     display: "flex",
-    gap: 6,
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 8,
+  },
+  layerPanelGroup: {
+    display: "flex",
+    background: "#f2f2f2",
+    borderRadius: 7,
+    padding: 3,
+    gap: 2,
+  },
+  layerPanelDivider: {
+    height: 1,
+    background: "rgba(0,0,0,0.06)",
+    margin: "10px 0",
   },
   countBadge: {
     position: "absolute",
