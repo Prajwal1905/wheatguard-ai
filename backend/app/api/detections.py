@@ -14,6 +14,7 @@ from app.ml.model_utils import predict_image
 from app.ml.ai_helper import get_short_remedy
 from app.utils.rate_limiter import rate_limit
 from app.api.alerts import create_alert_internal
+from datetime import datetime
 
 router = APIRouter(prefix="/detections", tags=["Detections"])
 
@@ -175,6 +176,7 @@ def get_map_data(
         db.query(Detection)
         .join(Report, Detection.report_id == Report.id)
         .filter(Report.lat.isnot(None), Report.lon.isnot(None))
+        .filter(Detection.is_resolved == False)  # resolved items hidden from map/alerts
         .order_by(Detection.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -227,7 +229,36 @@ def get_detection_detail(detection_id: int, db: Session = Depends(get_db)):
         "lon":           float(detection.report.lon) if detection.report else None,
         "source":        detection.report.source if detection.report else None,
         "remedy":        remedy,
+        "is_resolved":   detection.is_resolved,
     }
+
+
+@router.patch("/{detection_id}/resolve")
+def resolve_detection(detection_id: int, db: Session = Depends(get_db)):
+    
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    detection.is_resolved = True
+    detection.resolved_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "resolved", "id": detection_id}
+
+
+@router.patch("/{detection_id}/reopen")
+def reopen_detection(detection_id: int, db: Session = Depends(get_db)):
+    """Undo a resolve — detection reappears on map/alerts."""
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    detection.is_resolved = False
+    detection.resolved_at = None
+    db.commit()
+
+    return {"message": "reopened", "id": detection_id}
 
 
 @router.delete("/{report_id}")
@@ -236,16 +267,7 @@ def delete_detection(
     device_id: str = None,
     db: Session = Depends(get_db),
 ):
-    """
-    Delete a detection + its report.
-
-    Ownership check: the requesting device_id must match the
-    device_id stored on the report when it was created.
-
-    Backward compatibility: reports created before device_id was
-    tracked (device_id is NULL) can be deleted by anyone — these are
-    old test records and the column didn't exist when they were made.
-    """
+    
     try:
         report = db.query(Report).filter(Report.id == report_id).first()
 
