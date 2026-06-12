@@ -14,4 +14,6 @@ class Report(Base):
     lat = Column(Float)
     lon = Column(Float)
 
+    device_id = Column(String(100), nullable=True, index=True)
+
     detections = relationship("Detection", back_populates="report", cascade="all, delete-orphan")
