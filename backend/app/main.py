@@ -23,6 +23,7 @@ fastapi_app = FastAPI(
 
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
 
+
 fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -49,6 +50,7 @@ from app.api import (
     ndvi_history,
     fields,
     local_sync,
+    stats,
 )
 from app.api import nasa_ndvi
 from app.api import sentinel_ndvi
@@ -66,6 +68,7 @@ fastapi_app.include_router(nasa_ndvi.router)
 fastapi_app.include_router(sentinel_ndvi.router)
 fastapi_app.include_router(ai_router)
 fastapi_app.include_router(local_sync.router)
+fastapi_app.include_router(stats.router)
 fastapi_app.include_router(upload.router)
 fastapi_app.include_router(alerts.router)
 fastapi_app.include_router(drone.router)
@@ -77,7 +80,6 @@ fastapi_app.include_router(fields.router)
 from fastapi.staticfiles import StaticFiles
 fastapi_app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-
 OPEN_EXACT = {
     "/",
     "/docs",
@@ -87,12 +89,11 @@ OPEN_EXACT = {
 }
 
 OPEN_PREFIXES = (
-    
+   
     "/detections/predict",
     "/detections/save",
     "/sync/local-detection",
 
-    
     "/ai/remedy",
     "/ai/explain",
     "/ai/chat",
@@ -106,13 +107,10 @@ OPEN_PREFIXES = (
     "/api/nasa_ndvi_polygon",
     "/api/ndvi_history",
 
-    
     "/upload/image",
 
-    
     "/fcm/register",
 
-    
     "/uploads",
 
     "/fields/photo",
@@ -152,6 +150,10 @@ async def auth_middleware(request: Request, call_next):
                 content={"detail": "Too many login attempts. Try again in 1 minute."},
             )
         return await call_next(request)
+    
+    if method == "DELETE" and path.startswith("/detections/"):
+        return await call_next(request)
+
 
     # Exact open paths
     if path in OPEN_EXACT:
@@ -169,7 +171,6 @@ async def auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-#  Socket.IO events 
 socket_manager.sio = sio
 
 @sio.event
@@ -179,7 +180,6 @@ async def connect(sid, environ):
 @sio.event
 async def disconnect(sid):
     print(f"Client disconnected: {sid}")
-
 
 @fastapi_app.get("/")
 def root():
