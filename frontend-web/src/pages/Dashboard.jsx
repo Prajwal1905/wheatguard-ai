@@ -20,7 +20,9 @@ export default function Dashboard() {
     ndvi:     "All",
   });
 
-  const [ndviDate, setNdviDate] = useState("2024-11-14");
+  // Default to today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split("T")[0];
+  const [ndviDate, setNdviDate] = useState(today);
 
   useEffect(() => {
     fetchData();
@@ -63,7 +65,7 @@ export default function Dashboard() {
 
   return (
     <div style={styles.layout}>
-     
+      {/* Left column */}
       <div style={styles.main}>
         <div style={styles.pageHeader}>
           <div>
@@ -81,9 +83,10 @@ export default function Dashboard() {
           </button>
         </div>
 
+        {/* Stat cards — fetch their own data from /api/stats */}
         <StatsCards />
 
-       
+        {/* Filter bar */}
         <div style={styles.filterBar}>
           <FilterSelect
             value={filters.severity}
@@ -129,7 +132,7 @@ export default function Dashboard() {
           />
         </div>
 
-       
+        {/* Map */}
         <div style={styles.mapWrap}>
           <MapView
             detections={filteredDetections}
@@ -139,7 +142,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      
+      {/* Right sidebar */}
       <div style={styles.sidebar}>
         <DailyTrendChart />
         <DiseaseTrends detections={filteredDetections} />
