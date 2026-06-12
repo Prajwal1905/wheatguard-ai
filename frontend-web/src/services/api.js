@@ -43,6 +43,11 @@ export async function analyzeDroneImage(formData) {
   return res.data;
 }
 
+export async function sendDroneAlert(detectionId) {
+  const res = await api.post(`/drone/detections/${detectionId}/alert`);
+  return res.data;
+}
+
 export const scanNDVIStress = async () => {
   const res = await api.post("/api/ndvi/stress/scan");
   return res.data;
