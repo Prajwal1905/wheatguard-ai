@@ -2,20 +2,19 @@ import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 
 export default function Settings() {
-  const [theme, setTheme] = useState("light");
   const [notifications, setNotifications] = useState(true);
   const [refreshRate, setRefreshRate] = useState("30");
 
   useEffect(() => {
-    setTheme(localStorage.getItem("theme") || "light");
     setNotifications(localStorage.getItem("notifications") !== "false");
     setRefreshRate(localStorage.getItem("refreshRate") || "30");
   }, []);
 
   const handleSave = () => {
-    localStorage.setItem("theme", theme);
     localStorage.setItem("notifications", String(notifications));
     localStorage.setItem("refreshRate", refreshRate);
+    
+    window.dispatchEvent(new Event("wheatguard-settings-changed"));
     toast.success("Settings saved");
   };
 
@@ -24,27 +23,9 @@ export default function Settings() {
       <h1 style={styles.title}>Settings</h1>
 
       <Section
-        icon="ti-moon"
-        heading="Appearance"
-        description="Choose how the interface looks"
-      >
-        <SettingRow label="Theme">
-          <select
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
-            style={styles.select}
-            aria-label="Theme"
-          >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </SettingRow>
-      </Section>
-
-      <Section
         icon="ti-bell"
         heading="Notifications"
-        description="Control alert and detection notifications"
+        description="Toast notifications for new detections and NDVI stress updates on the Live map page"
       >
         <SettingRow label="Enable alerts">
           <Toggle
@@ -58,7 +39,7 @@ export default function Settings() {
       <Section
         icon="ti-refresh"
         heading="Auto-refresh"
-        description="How often the dashboard pulls new data"
+        description="How often the Live map page automatically pulls new detections and NDVI stress data"
       >
         <SettingRow label="Refresh interval">
           <select
@@ -71,6 +52,7 @@ export default function Settings() {
             <option value="30">Every 30 seconds</option>
             <option value="60">Every 1 minute</option>
             <option value="300">Every 5 minutes</option>
+            <option value="0">Off (manual refresh only)</option>
           </select>
         </SettingRow>
       </Section>

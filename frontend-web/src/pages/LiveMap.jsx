@@ -12,12 +12,19 @@ export default function LiveMap() {
   const [filters, setFilters] = useState({ severity: "All", disease: "All" });
   const [locatePoint, setLocatePoint] = useState(null);
 
+  const notificationsEnabled = () =>
+    localStorage.getItem("notifications") !== "false";
+
   useEffect(() => {
     loadAllData();
 
     socket.on("new_detection", (d) => {
-      setDetections((prev) => prev.some((x) => x.id === d.id) ? prev : [...prev, d]);
-      toast.success(`${d.disease} (${d.severity}) detected`);
+      setDetections((prev) =>
+        prev.some((x) => x.id === d.id) ? prev : [...prev, d],
+      );
+      if (notificationsEnabled()) {
+        toast.success(`${d.disease} (${d.severity}) detected`);
+      }
     });
 
     socket.on("ndvi_stress_update", (items) => {
@@ -32,8 +39,13 @@ export default function LiveMap() {
         current: s.current_ndvi,
         type: "stress",
       }));
-      setDetections((prev) => [...prev.filter((p) => p.type !== "stress"), ...newStress]);
-      toast(`NDVI stress updated — ${items.length} locations`);
+      setDetections((prev) => [
+        ...prev.filter((p) => p.type !== "stress"),
+        ...newStress,
+      ]);
+      if (notificationsEnabled()) {
+        toast(`NDVI stress updated — ${items.length} locations`);
+      }
     });
 
     return () => {
@@ -42,12 +54,33 @@ export default function LiveMap() {
     };
   }, []);
 
+  useEffect(() => {
+    let interval;
+
+    const startInterval = () => {
+      if (interval) clearInterval(interval);
+      const seconds = parseInt(localStorage.getItem("refreshRate") || "30", 10);
+      if (seconds > 0) {
+        interval = setInterval(loadAllData, seconds * 1000);
+      }
+    };
+
+    startInterval();
+    window.addEventListener("wheatguard-settings-changed", startInterval);
+
+    return () => {
+      if (interval) clearInterval(interval);
+      window.removeEventListener("wheatguard-settings-changed", startInterval);
+    };
+  }, []);
+
   const [params] = useSearchParams();
   const urlLat = params.get("lat");
   const urlLon = params.get("lon");
 
   useEffect(() => {
-    if (urlLat && urlLon) setLocatePoint({ lat: parseFloat(urlLat), lon: parseFloat(urlLon) });
+    if (urlLat && urlLon)
+      setLocatePoint({ lat: parseFloat(urlLat), lon: parseFloat(urlLon) });
   }, [urlLat, urlLon]);
 
   useEffect(() => {
@@ -56,9 +89,9 @@ export default function LiveMap() {
 
   async function loadAllData() {
     try {
-      const det    = await getMapData();
+      const det = await getMapData();
       const stress = await getNDVIStressAlerts();
-      const flds   = await getFields();
+      const flds = await getFields();
 
       const stressPoints = stress.map((s) => ({
         id: `stress-${s.id}`,
@@ -80,8 +113,10 @@ export default function LiveMap() {
   }
 
   const filtered = detections.filter((d) => {
-    const severityOk = filters.severity === "All" || d.severity === filters.severity;
-    const diseaseOk  = filters.disease  === "All" || d.disease  === filters.disease;
+    const severityOk =
+      filters.severity === "All" || d.severity === filters.severity;
+    const diseaseOk =
+      filters.disease === "All" || d.disease === filters.disease;
     return severityOk && diseaseOk;
   });
 
@@ -100,35 +135,57 @@ export default function LiveMap() {
 
       <div style={styles.controlBar}>
         <div style={styles.filterGroup}>
-          <i className="ti ti-alert-triangle" style={styles.filterIcon} aria-hidden="true" />
+          <i
+            className="ti ti-alert-triangle"
+            style={styles.filterIcon}
+            aria-hidden="true"
+          />
           <select
             value={filters.severity}
-            onChange={(e) => setFilters({ ...filters, severity: e.target.value })}
+            onChange={(e) =>
+              setFilters({ ...filters, severity: e.target.value })
+            }
             style={styles.select}
             aria-label="Filter by severity"
           >
-            {["All", "High", "Medium", "Low", "Critical", "Moderate"].map((s) => (
-              <option key={s} value={s}>{s === "All" ? "All severities" : s}</option>
-            ))}
+            {["All", "High", "Medium", "Low", "Critical", "Moderate"].map(
+              (s) => (
+                <option key={s} value={s}>
+                  {s === "All" ? "All severities" : s}
+                </option>
+              ),
+            )}
           </select>
         </div>
 
         <div style={styles.filterGroup}>
-          <i className="ti ti-virus" style={styles.filterIcon} aria-hidden="true" />
+          <i
+            className="ti ti-virus"
+            style={styles.filterIcon}
+            aria-hidden="true"
+          />
           <select
             value={filters.disease}
-            onChange={(e) => setFilters({ ...filters, disease: e.target.value })}
+            onChange={(e) =>
+              setFilters({ ...filters, disease: e.target.value })
+            }
             style={styles.select}
             aria-label="Filter by disease"
           >
             {uniqueDiseases.map((d) => (
-              <option key={d} value={d}>{d === "All" ? "All diseases" : d}</option>
+              <option key={d} value={d}>
+                {d === "All" ? "All diseases" : d}
+              </option>
             ))}
           </select>
         </div>
 
         <button onClick={loadAllData} style={styles.btnGhost}>
-          <i className="ti ti-refresh" style={{ fontSize: 14 }} aria-hidden="true" />
+          <i
+            className="ti ti-refresh"
+            style={{ fontSize: 14 }}
+            aria-hidden="true"
+          />
           Refresh
         </button>
       </div>
