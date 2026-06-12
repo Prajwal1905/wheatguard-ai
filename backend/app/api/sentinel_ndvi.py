@@ -26,6 +26,9 @@ TOKEN_URL = (
 
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
 
+# How far back to search for a cloud-free scene
+NDVI_LOOKBACK_DAYS = 30
+
 _cached_token = None
 _token_timestamp = None
 
@@ -60,10 +63,30 @@ async def get_token(force_new=False):
 
 
 def payload_for_bbox(bbox):
+    """
+    Build a CDSE Process API request that:
+    - searches the last NDVI_LOOKBACK_DAYS for imagery
+    - picks the LEAST CLOUDY scene in that window (mosaickingOrder: leastCC)
+    - masks out clouds/shadows/snow using the Scene Classification (SCL) band
+      so cloudy pixels don't pollute the NDVI value
+    """
+    now = datetime.datetime.utcnow()
+    start = (now - datetime.timedelta(days=NDVI_LOOKBACK_DAYS)).strftime("%Y-%m-%dT00:00:00Z")
+    end = now.strftime("%Y-%m-%dT23:59:59Z")
+
     return {
         "input": {
             "bounds": {"bbox": bbox},
-            "data": [{"type": "sentinel-2-l2a"}],
+            "data": [
+                {
+                    "type": "sentinel-2-l2a",
+                    "dataFilter": {
+                        "timeRange": {"from": start, "to": end},
+                        "mosaickingOrder": "leastCC",  # least cloud cover first
+                        "maxCloudCoverage": 40,
+                    },
+                }
+            ],
         },
         "output": {
             "width": 1,
@@ -76,13 +99,23 @@ def payload_for_bbox(bbox):
             //VERSION=3
             function setup() {
                 return {
-                    input: ["B04", "B08"],
+                    input: ["B04", "B08", "SCL"],
                     output: { bands: 1, sampleType: "FLOAT32" }
                 };
             }
+
+            // SCL classes considered "bad" — cloud, cloud shadow, snow/ice,
+            // cloud probability (medium/high), cirrus, defective pixels.
+            // See: https://sentinels.copernicus.eu/web/sentinel/technical-guides/sentinel-2-msi/level-2a/algorithm
+            const BAD_SCL = [0, 1, 3, 8, 9, 10, 11];
+
             function evaluatePixel(p) {
+                if (BAD_SCL.includes(p.SCL)) {
+                    // Sentinel value for "no usable data" — caller treats this as null
+                    return [-999];
+                }
                 let ndvi = (p.B08 - p.B04) / (p.B08 + p.B04);
-                if (!isFinite(ndvi)) ndvi = -1;
+                if (!isFinite(ndvi)) ndvi = -999;
                 return [ndvi];
             }
         """,
@@ -104,7 +137,6 @@ async def fetch_ndvi(lat, lon):
     lon_r = round(lon, 4)
     key = f"ndvi:{lat_r}:{lon_r}"
 
-    
     cached = cache_get(key)
     if cached is not None:
         return cached
@@ -117,9 +149,8 @@ async def fetch_ndvi(lat, lon):
     async with aiohttp.ClientSession() as session:
         resp = await call_ndvi_api(session, payload, token)
 
-        
         if resp.status == 401:
-            print("🔁 TOKEN EXPIRED — refreshing and retrying...")
+            print("TOKEN EXPIRED — refreshing and retrying...")
             token = await get_token(force_new=True)
             resp = await call_ndvi_api(session, payload, token)
 
@@ -131,12 +162,24 @@ async def fetch_ndvi(lat, lon):
         arr = tifffile.imread(io.BytesIO(data))
         ndvi = float(arr[0][0])
 
-        if ndvi > -1:
-            ndvi = round(ndvi, 3)
-            cache_set(key, ndvi)
-            return ndvi
+        # -999 = cloud/cloud-shadow/no-data pixel (masked in evalscript)
+        if ndvi <= -1:
+            print(f"NDVI: pixel at ({lat_r},{lon_r}) is cloudy/no-data — skipping")
+            return None
+
+        ndvi = round(ndvi, 3)
+        cache_set(key, ndvi)
+        return ndvi
 
     return None
+
+
+def classify_ndvi(ndvi: float) -> str:
+    if ndvi >= 0.4:
+        return "Healthy"
+    if ndvi >= 0.2:
+        return "Stressed"
+    return "Critical"
 
 
 # ---------------- ROUTES -----------------
@@ -146,7 +189,11 @@ async def sentinel_ndvi_value(lat: float, lon: float, db: Session = Depends(get_
     ndvi = await fetch_ndvi(lat, lon)
 
     if ndvi is None:
-        raise HTTPException(404, "NDVI not available")
+        raise HTTPException(
+            404,
+            f"No cloud-free Sentinel-2 imagery available for this location "
+            f"in the last {NDVI_LOOKBACK_DAYS} days.",
+        )
 
     save_ndvi(db, lat, lon, ndvi)
 
@@ -154,11 +201,7 @@ async def sentinel_ndvi_value(lat: float, lon: float, db: Session = Depends(get_
         "lat": lat,
         "lon": lon,
         "ndvi": ndvi,
-        "status": (
-            "Healthy" if ndvi >= 0.4 else
-            "Stressed" if ndvi >= 0.2 else
-            "Critical"
-        ),
+        "status": classify_ndvi(ndvi),
     }
 
 
@@ -166,23 +209,31 @@ async def sentinel_ndvi_value(lat: float, lon: float, db: Session = Depends(get_
 async def sentinel_ndvi_polygon(geojson: dict, db: Session = Depends(get_db)):
     coords = geojson["geometry"]["coordinates"][0]
 
-    tasks = [fetch_ndvi(lat, lon) for lat, lon in coords]
+    # GeoJSON coordinates are [longitude, latitude] — NOT [lat, lon].
+    # Unpack in the correct order before passing to fetch_ndvi(lat, lon).
+    tasks = [fetch_ndvi(lat=c[1], lon=c[0]) for c in coords]
     results = await asyncio.gather(*tasks)
 
     values = [v for v in results if v is not None]
     if not values:
-        return {"average_ndvi": None, "status": "no data"}
+        return {
+            "average_ndvi": None,
+            "status": "no data",
+            "message": (
+                f"No cloud-free Sentinel-2 imagery available for this field "
+                f"in the last {NDVI_LOOKBACK_DAYS} days."
+            ),
+        }
 
     avg = round(sum(values) / len(values), 3)
 
-    first_lat, first_lon = coords[0]
+    # First coordinate is [lon, lat] — save in correct (lat, lon) order
+    first_lon, first_lat = coords[0][0], coords[0][1]
     save_ndvi(db, first_lat, first_lon, avg)
 
     return {
         "average_ndvi": avg,
-        "status": (
-            "Healthy" if avg >= 0.4 else
-            "Stressed" if avg >= 0.2 else
-            "Critical"
-        ),
+        "status": classify_ndvi(avg),
+        "points_sampled": len(coords),
+        "points_with_data": len(values),
     }
