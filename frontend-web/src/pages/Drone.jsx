@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import DroneUpload from "../components/DroneUpload";
 import DronePreview from "../components/DronePreview";
 import DroneDetections from "../components/DroneDetections";
-import { analyzeDroneImage } from "../services/api";
+import { analyzeDroneImage, sendDroneAlert } from "../services/api";
+import toast from "react-hot-toast";
 
 export default function Drone() {
   const [file, setFile] = useState(null);
@@ -12,9 +13,14 @@ export default function Drone() {
   const [error, setError] = useState("");
   const [lastResult, setLastResult] = useState(null);
   const [history, setHistory] = useState([]);
+  const [sendingAlert, setSendingAlert] = useState(false);
+  const [alertSentIds, setAlertSentIds] = useState(new Set());
 
   useEffect(() => {
-    if (!file) { setPreviewUrl(null); return; }
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
@@ -27,11 +33,12 @@ export default function Drone() {
     }
     setError("");
     navigator.geolocation.getCurrentPosition(
-      (pos) => setLocation({
-        lat: pos.coords.latitude.toFixed(6),
-        lon: pos.coords.longitude.toFixed(6),
-      }),
-      () => setError("Unable to fetch your location.")
+      (pos) =>
+        setLocation({
+          lat: pos.coords.latitude.toFixed(6),
+          lon: pos.coords.longitude.toFixed(6),
+        }),
+      () => setError("Unable to fetch your location."),
     );
   };
 
@@ -43,8 +50,14 @@ export default function Drone() {
   };
 
   const handleAnalyze = async () => {
-    if (!file) { setError("Please select an image first."); return; }
-    if (!location.lat || !location.lon) { setError("Please provide field coordinates."); return; }
+    if (!file) {
+      setError("Please select an image first.");
+      return;
+    }
+    if (!location.lat || !location.lon) {
+      setError("Please provide field coordinates.");
+      return;
+    }
 
     setError("");
     setIsAnalyzing(true);
@@ -55,7 +68,16 @@ export default function Drone() {
       formData.append("lon", location.lon);
       const data = await analyzeDroneImage(formData);
       setLastResult(data);
-      if (data?.detection) setHistory((prev) => [data.detection, ...prev]);
+      if (data?.detection) {
+        setHistory((prev) => [
+          {
+            ...data.detection,
+            remedy: data.result?.remedy,
+            ai_explanation: data.result?.ai_explanation,
+          },
+          ...prev,
+        ]);
+      }
     } catch (e) {
       console.error(e);
       setError("Analysis failed. Please try again.");
@@ -64,21 +86,45 @@ export default function Drone() {
     }
   };
 
+  const handleSendAlert = async (detectionId) => {
+    setSendingAlert(true);
+    try {
+      await sendDroneAlert(detectionId);
+      toast.success("Alert sent to nearby farmers");
+      setAlertSentIds((prev) => new Set(prev).add(detectionId));
+    } catch (e) {
+      const msg = e?.response?.data?.detail || "Failed to send alert";
+      toast.error(msg);
+    } finally {
+      setSendingAlert(false);
+    }
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>
-            <i className="ti ti-drone" style={styles.titleIcon} aria-hidden="true" />
+            <i
+              className="ti ti-drone"
+              style={styles.titleIcon}
+              aria-hidden="true"
+            />
             Drone analysis
           </h1>
-          <p style={styles.subtitle}>Upload field images to detect disease and map hotspots</p>
+          <p style={styles.subtitle}>
+            Upload field images to detect disease and map hotspots
+          </p>
         </div>
       </div>
 
       {error && (
         <div style={styles.errorBox}>
-          <i className="ti ti-alert-circle" style={{ fontSize: 14 }} aria-hidden="true" />
+          <i
+            className="ti ti-alert-circle"
+            style={{ fontSize: 14 }}
+            aria-hidden="true"
+          />
           {error}
         </div>
       )}
@@ -103,7 +149,13 @@ export default function Drone() {
             onClear={handleClear}
             isAnalyzing={isAnalyzing}
           />
-          <DroneDetections lastResult={lastResult} history={history} />
+          <DroneDetections
+            lastResult={lastResult}
+            history={history}
+            onSendAlert={handleSendAlert}
+            sendingAlert={sendingAlert}
+            alertSentIds={alertSentIds}
+          />
         </div>
       </div>
     </div>
