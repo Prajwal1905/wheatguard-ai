@@ -11,8 +11,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- 🎤 Microphone permission for voice chatbot input -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
-        android:label="wheat_disease_clean"
+        android:label="WheatGuard AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
@@ -47,6 +50,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
+        </intent>
+
+        <!-- 🎤 Required for speech recognition on Android 11+ (API 30+) -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
