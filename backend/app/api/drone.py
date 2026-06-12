@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.ml.model_utils import predict_image
-from app.utils.socket_manager import broadcast_new_detection, broadcast_new_alert
+from app.utils.socket_manager import broadcast_new_detection
 from app.db.database import SessionLocal
-from app import crud, schemas
+from app import crud
 from app.models.report import Report
+from app.models.detection import Detection
+from app.api.alerts import create_alert_internal
 
 router = APIRouter(prefix="/drone", tags=["Drone"])
 
@@ -22,7 +24,7 @@ def get_db():
 
 
 def calculate_severity(confidence: float) -> str:
-    """Single source of truth for severity — used everywhere."""
+    
     if confidence >= 85:
         return "High"
     if confidence >= 60:
@@ -37,21 +39,21 @@ async def analyze_drone_image(
     lon: float = Form(...),
     db: Session = Depends(get_db),
 ):
-    # 1. Read image
+    #  Read image
     image_bytes = await file.read()
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Empty image file")
 
-    # 2. Run inference
+    #  Run inference
     result = predict_image(image_bytes)
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
 
-    disease   = result["exact_disease"]
+    disease    = result["exact_disease"]
     confidence = float(result.get("confidence", 0))
-    severity  = calculate_severity(confidence)
+    severity   = calculate_severity(confidence)
 
-    # 3. Save a Report row so Detection has a valid report_id
+    #  Save a Report row so Detection has a valid report_id
     report = Report(
         source="drone",
         image_url=None,
@@ -63,7 +65,7 @@ async def analyze_drone_image(
     db.commit()
     db.refresh(report)
 
-    # 4. Save Detection
+    #  Save Detection
     detection = crud.create_detection(db, {
         "report_id":     report.id,
         "disease_label": disease,
@@ -73,7 +75,7 @@ async def analyze_drone_image(
         "model_version": "19-class-efficientnet-b3-onnx",
     })
 
-    # 5. Broadcast detection over Socket.IO
+    #  Broadcast detection over Socket.IO (shows up on live map immediately)
     await broadcast_new_detection({
         "id":         detection.id,
         "lat":        lat,
@@ -85,30 +87,7 @@ async def analyze_drone_image(
         "source":     "drone",
     })
 
-    # 6. Only create an alert if disease is not Healthy
-    alert = None
-    if disease != "Healthy":
-        alert = crud.create_alert(db, schemas.AlertCreate(
-            disease=disease,
-            severity=severity,
-            lat=lat,
-            lon=lon,
-            cases=1,
-            source="drone",
-        ))
-
-        await broadcast_new_alert({
-            "id":        alert.id,
-            "disease":   alert.disease,
-            "severity":  alert.severity,
-            "lat":       alert.lat,
-            "lon":       alert.lon,
-            "cases":     alert.cases,
-            "source":    "drone",
-            "timestamp": alert.created_at.isoformat(),
-        })
-
-    # 7. Return clean response
+    
     return {
         "detection": {
             "id":         detection.id,
@@ -119,17 +98,45 @@ async def analyze_drone_image(
             "lon":        lon,
             "timestamp":  detection.created_at.isoformat(),
         },
+        "result": {
+            "label":          disease,
+            "exact_disease":  disease,
+            "confidence":     round(confidence, 2),
+            "severity":       severity,
+            "remedy":         result.get("remedy"),
+            "ai_explanation": result.get("ai_explanation"),
+        },
+    }
+
+
+@router.post("/detections/{detection_id}/alert")
+async def send_drone_alert(detection_id: int, db: Session = Depends(get_db)):
+    
+    detection = db.query(Detection).filter(Detection.id == detection_id).first()
+    if not detection:
+        raise HTTPException(status_code=404, detail="Detection not found")
+
+    if not detection.report or detection.report.lat is None or detection.report.lon is None:
+        raise HTTPException(status_code=400, detail="Detection has no location data")
+
+    if detection.disease_label == "Healthy":
+        raise HTTPException(status_code=400, detail="Cannot alert on a Healthy detection")
+
+    alert = await create_alert_internal(
+        db,
+        disease=detection.disease_label,
+        severity=detection.severity,
+        lat=detection.report.lat,
+        lon=detection.report.lon,
+        cases=1,
+        source="drone",
+    )
+
+    return {
+        "message": "Alert sent to nearby farmers",
         "alert": {
             "id":       alert.id,
             "disease":  alert.disease,
             "severity": alert.severity,
-        } if alert else None,
-        "result": {
-            "label":         disease,
-            "exact_disease": disease,
-            "confidence":    round(confidence, 2),
-            "severity":      severity,
-            "remedy":        result.get("remedy"),
-            "ai_explanation": result.get("ai_explanation"),
         },
     }
