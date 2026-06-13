@@ -19,6 +19,23 @@ services:
     networks:
       - backend-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: wheatguard-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend-net
+
   backend:
     build:
       context: .
@@ -30,12 +47,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
     env_file:
       - backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./backend/uploads:/app/uploads
     restart: always
@@ -57,6 +77,7 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
 
 networks:
   backend-net:
