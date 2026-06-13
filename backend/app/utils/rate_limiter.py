@@ -25,25 +25,32 @@ def rate_limit(
     ip = request.client.host if request.client else "unknown"
 
     if USE_REDIS:
-        key = f"ratelimit:{ip}"
-        count = rcache.incr(key)
-        if count == 1:
-            rcache.expire(key, window_seconds)
+        try:
+            key = f"ratelimit:{ip}"
+            count = rcache.incr(key)
+            if count == 1:
+                rcache.expire(key, window_seconds)
 
-        if count > max_requests:
-            ttl = rcache.ttl(key)
-            retry_after = ttl if ttl and ttl > 0 else window_seconds
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error":       "Too many requests",
-                    "message":     f"Maximum {max_requests} requests per "
-                                   f"{window_seconds} seconds allowed.",
-                    "retry_after": retry_after,
-                },
-                headers={"Retry-After": str(retry_after)},
-            )
-        return
+            if count > max_requests:
+                ttl = rcache.ttl(key)
+                retry_after = ttl if ttl and ttl > 0 else window_seconds
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "error":       "Too many requests",
+                        "message":     f"Maximum {max_requests} requests per "
+                                       f"{window_seconds} seconds allowed.",
+                        "retry_after": retry_after,
+                    },
+                    headers={"Retry-After": str(retry_after)},
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception as e:
+            
+            print(f"Rate limiter: Redis unavailable ({e}) — allowing request")
+            return
 
     now = time.time()
 
