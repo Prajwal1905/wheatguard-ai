@@ -56,7 +56,6 @@ def verify_jwt_token(token: str) -> dict:
 
 @router.post("/login")
 def login(data: LoginData):
-    
     email_ok = secrets.compare_digest(data.email, ADMIN_EMAIL)
 
     password_ok = bcrypt.checkpw(
