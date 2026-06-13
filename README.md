@@ -1,5 +1,3 @@
-# WheatGuard AI
-
 An AI-powered wheat disease detection and monitoring platform for Indian farmers.
 Built for Smart India Hackathon 2025 — Selected in Top 5 Projects Nationally.
 
@@ -11,7 +9,9 @@ and real-time outbreak alerts into one unified system for Indian wheat farmers.
 ## Table of Contents
 
 - [About the Project](#about-the-project)
-- [SIH 2024 Achievement](#sih-2024-achievement)
+- [Demo Videos](#demo-videos)
+- [SIH 2025 Achievement](#sih-2025-achievement)
+- [Problem Statement](#problem-statement)
 - [Features](#features)
 - [Project Structure](#project-structure)
 - [Tech Stack](#tech-stack)
@@ -48,7 +48,6 @@ The system consists of three parts:
 | Mobile App Demo | [Watch Mobile App Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
 | Dashboard Demo | [Watch Dashboard Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
 
-
 ---
 
 ## SIH 2025 Achievement
@@ -60,6 +59,43 @@ The project addresses a real problem faced by wheat farmers in India — late de
 of crop diseases leading to massive yield loss every year. WheatGuard AI provides
 an affordable, multilingual, offline-capable solution that works even in low connectivity
 rural areas.
+
+---
+
+## Problem Statement
+
+| Field | Detail |
+|---|---|
+| Problem Statement ID | 25268 |
+| Title | Early Detection of Wheat Diseases |
+| Organization | Ministry of Agriculture & Farmers Welfare (MoA&FW) |
+| Department | Department of Agriculture & Farmers Welfare (DoA&FW) — Crops |
+| Category | Software |
+| Theme | Agriculture, FoodTech & Rural Development |
+
+### Description (as given by the Ministry)
+
+Wheat is affected by several diseases — primarily fungal diseases like rusts, smuts,
+powdery mildew, and root and head blights, but also bacterial and viral diseases such
+as Black Chaff and Barley Yellow Dwarf Virus (BYDV). These pathogens cause symptoms
+ranging from leaf spots and wilting to blighting of the ears and grain, leading to
+significant yield losses. Major wheat diseases such as rusts, blight, and Karnal bunt
+often spread rapidly, causing widespread crop damage if not detected early.
+
+### Expected Solution
+
+Development of AI/ML-based image recognition tools integrated with drone/satellite
+data and mobile apps to provide real-time detection, mapping, and alerts to farmers.
+
+### How WheatGuard AI Addresses This
+
+| Expected Solution Component | WheatGuard AI Implementation |
+|---|---|
+| AI/ML-based image recognition | 19-class EfficientNet-B3 ONNX model, detecting all major fungal (rust, smut, blight, Karnal bunt, powdery mildew), bacterial (Black Chaff), and viral (BYDV) diseases listed in the problem statement |
+| Drone data integration | Dedicated Drone Analysis page — officers survey fields, model analyzes images, admin reviews results and decides whether to alert nearby farmers |
+| Satellite data integration | Live Sentinel-2 NDVI (Copernicus CDSE) with cloud masking, plus NASA VIIRS/MODIS — detects crop stress before visible symptoms appear |
+| Mobile app for farmers | Flutter app — offline-capable, multilingual (English/Hindi/Marathi), voice input, AI chatbot, text-to-speech remedies |
+| Real-time detection, mapping, and alerts | Socket.IO live map updates, FCM push notifications to farmers within a configurable radius, geotagged detection mapping |
 
 ---
 
@@ -90,6 +126,12 @@ rural areas.
 - Reports with CSV and PDF export
 - Live WebSocket feed for new detections
 - JWT-based admin authentication
+- Resolve/reopen lifecycle for detections and NDVI stress alerts —
+  admin can dismiss handled issues (hidden from map/alerts, kept in DB
+  for history); NDVI stress alerts auto-resolve when crop health recovers
+- Drone analysis uses a "review then alert" flow — admin sees the AI
+  result first and explicitly decides whether to notify nearby farmers,
+  rather than auto-alerting on every detection
 
 ### Backend (FastAPI)
 
@@ -102,6 +144,13 @@ rural areas.
 - PostgreSQL with PostGIS database
 - Supabase storage for detection images
 - AI remedy generation via OpenRouter (Grok model)
+- Redis-backed caching (NDVI values, 24h TTL) and rate limiting,
+  with graceful fail-open if Redis is unavailable
+- Bcrypt-hashed admin credentials with constant-time comparison
+- Upload validation — rejects oversized or non-image files before
+  they reach the ML pipeline
+- Sentinel-2 NDVI requests use a 30-day lookback with least-cloud
+  mosaicking and SCL-based cloud masking for accurate readings
 
 ---
 
@@ -133,7 +182,7 @@ wheatguard-ai/
 │   │   │   └── wheat_disease_b3.onnx # ML model (download separately)
 │   │   ├── models/                   # SQLAlchemy database models
 │   │   ├── middleware/               # JWT auth middleware
-│   │   ├── utils/                    # Socket, FCM, Supabase helpers
+│   │   ├── utils/                    # Socket, FCM, Supabase, cache, rate limiter helpers
 │   │   ├── main.py                   # FastAPI application entry point
 │   │   └── scheduler.py              # Scheduled NDVI scan jobs
 │   ├── Dockerfile
@@ -176,6 +225,7 @@ wheatguard-ai/
 | Frontend | React 19, Vite, Material UI, Leaflet, Recharts |
 | Backend | FastAPI, Python 3.10, SQLAlchemy, Uvicorn |
 | Database | PostgreSQL 15 with PostGIS |
+| Cache / Rate Limiting | Redis |
 | ML Model | EfficientNet-B3 ONNX (19 disease classes) |
 | Offline ML | TFLite (on-device Flutter inference) |
 | AI Chatbot | OpenRouter API with Grok model |
@@ -184,6 +234,7 @@ wheatguard-ai/
 | Realtime | Socket.IO |
 | Push Notifications | Firebase Cloud Messaging (FCM) |
 | Authentication | JWT (JSON Web Tokens) |
+| Security | Bcrypt password hashing, JWT auth, Redis-backed rate limiting, image upload validation |
 | Containerization | Docker and Docker Compose |
 | Web Server | Nginx |
 
@@ -245,6 +296,9 @@ POSTGRES_PORT=5432
 # Database
 DATABASE_URL=postgresql+psycopg2://postgres:your_password@db:5432/wheatguard
 
+# Cache / Rate limiting
+REDIS_URL=redis://redis:6379/0
+
 # AI Chatbot
 OPENROUTER_API_KEY=your_openrouter_key
 
@@ -267,7 +321,9 @@ FCM_SERVER_KEY=your_fcm_server_key
 
 # Admin Authentication
 ADMIN_EMAIL=admin@yourdomain.com
-ADMIN_PASSWORD=your_strong_password
+# Generate with: python -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt()).decode())"
+ADMIN_PASSWORD_HASH=your_bcrypt_hash
+# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
 ADMIN_SECRET=your_jwt_secret_key
 ```
 
@@ -309,6 +365,7 @@ docker-compose restart backend
 | Backend API | http://localhost:8000 |
 | API Docs Swagger | http://localhost:8000/docs |
 | Database | localhost:5432 |
+| Redis | localhost:6379 |
 
 ---
 
@@ -407,15 +464,22 @@ http://localhost:8000/docs
 |---|---|---|
 | POST | /detections/predict | Predict disease from image |
 | GET | /detections/map_data | Get all detections for map |
-| DELETE | /detections/{id} | Delete a detection |
+| GET | /detections/{id} | Get detection detail (remedy, image, etc.) |
+| PATCH | /detections/{id}/resolve | Mark detection as resolved (admin) |
+| PATCH | /detections/{id}/reopen | Reopen a resolved detection |
+| DELETE | /detections/{id} | Delete a detection (device-owned, mobile) |
 | GET | /alerts/ | Get all disease alerts |
 | POST | /alerts/ | Create new alert |
-| GET | /alerts/nearby | Get alerts within 5km radius |
+| GET | /alerts/nearby | Get alerts within configured radius |
+| PATCH | /alerts/{id}/resolve | Resolve an alert |
+| PATCH | /alerts/{id}/reopen | Reopen an alert |
 | POST | /drone/analyze | Analyze drone image |
-| GET | /api/sentinel_ndvi_value | Get Sentinel-2 NDVI for location |
-| POST | /api/sentinel_ndvi_polygon | Get NDVI for field polygon |
+| POST | /drone/detections/{id}/alert | Admin sends alert to nearby farmers for a drone detection |
+| GET | /api/sentinel_ndvi_value | Get Sentinel-2 NDVI for location (cloud-masked, 30-day lookback) |
+| POST | /api/sentinel_ndvi_polygon | Get average NDVI for a field polygon |
 | GET | /api/ndvi/stress | Get active NDVI stress alerts |
-| POST | /api/ndvi/stress/scan | Run NDVI stress scan |
+| POST | /api/ndvi/stress/scan | Run NDVI stress scan (auto-resolves recovered locations) |
+| PATCH | /api/ndvi/stress/{id}/resolve | Manually resolve an NDVI stress alert |
 | GET | /api/ndvi_history | Get NDVI history for location |
 | GET | /fields/ | Get all registered fields |
 | POST | /fields/ | Register new field with photos |
