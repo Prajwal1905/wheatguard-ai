@@ -80,7 +80,12 @@ export default function Drone() {
       }
     } catch (e) {
       console.error(e);
-      setError("Analysis failed. Please try again.");
+      const detail = e?.response?.data?.detail;
+      setError(
+        typeof detail === "string"
+          ? detail
+          : "Analysis failed. Please try again.",
+      );
     } finally {
       setIsAnalyzing(false);
     }
