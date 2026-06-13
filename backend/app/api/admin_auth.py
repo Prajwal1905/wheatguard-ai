@@ -1,17 +1,38 @@
 # app/api/admin_auth.py
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
-import jwt
-import datetime
 import os
+import secrets
+import datetime
+
+import bcrypt
+import jwt
+from fastapi import APIRouter, HTTPException, Header
 
 router = APIRouter(prefix="/admin", tags=["Admin Auth"])
 
-SECRET         = os.getenv("ADMIN_SECRET", "supersecret123")
-ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@wheatguard.com")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "WheatGuard@2024")
-TOKEN_HOURS    = 10
+
+SECRET = os.getenv("ADMIN_SECRET")
+if not SECRET:
+    raise RuntimeError(
+        "ADMIN_SECRET environment variable is not set. "
+        "Refusing to start with a default JWT signing secret."
+    )
+
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+if not ADMIN_EMAIL:
+    raise RuntimeError("ADMIN_EMAIL environment variable is not set.")
+
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH")
+if not ADMIN_PASSWORD_HASH:
+    raise RuntimeError(
+        "ADMIN_PASSWORD_HASH environment variable is not set. "
+        "Generate one with bcrypt — see comment above this check."
+    )
+
+TOKEN_HOURS = 10
+
+
+from pydantic import BaseModel
 
 
 class LoginData(BaseModel):
@@ -35,9 +56,13 @@ def verify_jwt_token(token: str) -> dict:
 
 @router.post("/login")
 def login(data: LoginData):
-    # Constant-time comparison to avoid timing attacks
-    email_ok    = data.email    == ADMIN_EMAIL
-    password_ok = data.password == ADMIN_PASSWORD
+    
+    email_ok = secrets.compare_digest(data.email, ADMIN_EMAIL)
+
+    password_ok = bcrypt.checkpw(
+        data.password.encode("utf-8"),
+        ADMIN_PASSWORD_HASH.encode("utf-8"),
+    )
 
     if not (email_ok and password_ok):
         raise HTTPException(
@@ -55,7 +80,17 @@ def login(data: LoginData):
 
 
 @router.get("/verify")
-def verify(token: str):
+def verify(authorization: str = Header(None)):
+    """
+    Verify a token passed via the Authorization header
+    (e.g. "Bearer <token>") — NOT a query parameter, since query
+    parameters can end up in server access logs and browser history.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    token = authorization.removeprefix("Bearer ").strip()
+
     try:
         payload = verify_jwt_token(token)
         return {
@@ -71,5 +106,4 @@ def verify(token: str):
 
 @router.post("/logout")
 def logout():
-    
     return {"message": "Logged out. Please remove the token from storage."}
