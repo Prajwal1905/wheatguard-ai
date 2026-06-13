@@ -11,9 +11,18 @@ from app.db.database import init_db
 from dotenv import load_dotenv
 load_dotenv()
 
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost",
+    "http://localhost:80",
+    "http://127.0.0.1",
+    "http://127.0.0.1:80",
+]
+
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins=["*"],
+    cors_allowed_origins=ALLOWED_ORIGINS,
 )
 
 fastapi_app = FastAPI(
@@ -26,14 +35,7 @@ app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
 
 fastapi_app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost",
-        "http://localhost:80",
-        "http://127.0.0.1",
-        "http://127.0.0.1:80",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],

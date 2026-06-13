@@ -5,12 +5,13 @@ import asyncio
 import tifffile
 import datetime
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.crud import save_ndvi
 from app.utils.cache import cache_get, cache_set
+from app.utils.rate_limiter import rate_limit
 
 router = APIRouter(prefix="/api", tags=["Sentinel NDVI"])
 
@@ -182,10 +183,11 @@ def classify_ndvi(ndvi: float) -> str:
     return "Critical"
 
 
-# ---------------- ROUTES -----------------
-
 @router.get("/sentinel_ndvi_value")
-async def sentinel_ndvi_value(lat: float, lon: float, db: Session = Depends(get_db)):
+async def sentinel_ndvi_value(request: Request, lat: float, lon: float, db: Session = Depends(get_db)):
+    
+    rate_limit(request, max_requests=30, window_seconds=60)
+
     ndvi = await fetch_ndvi(lat, lon)
 
     if ndvi is None:
@@ -206,11 +208,12 @@ async def sentinel_ndvi_value(lat: float, lon: float, db: Session = Depends(get_
 
 
 @router.post("/sentinel_ndvi_polygon")
-async def sentinel_ndvi_polygon(geojson: dict, db: Session = Depends(get_db)):
+async def sentinel_ndvi_polygon(request: Request, geojson: dict, db: Session = Depends(get_db)):
+    
+    rate_limit(request, max_requests=10, window_seconds=60)
+
     coords = geojson["geometry"]["coordinates"][0]
 
-    # GeoJSON coordinates are [longitude, latitude] — NOT [lat, lon].
-    # Unpack in the correct order before passing to fetch_ndvi(lat, lon).
     tasks = [fetch_ndvi(lat=c[1], lon=c[0]) for c in coords]
     results = await asyncio.gather(*tasks)
 
