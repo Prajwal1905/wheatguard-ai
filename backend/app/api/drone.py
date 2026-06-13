@@ -11,6 +11,7 @@ from app import crud
 from app.models.report import Report
 from app.models.detection import Detection
 from app.api.alerts import create_alert_internal
+from app.utils.image_validation import validate_image_bytes
 
 router = APIRouter(prefix="/drone", tags=["Drone"])
 
@@ -39,10 +40,9 @@ async def analyze_drone_image(
     lon: float = Form(...),
     db: Session = Depends(get_db),
 ):
-    #  Read image
+    #  Read and validate image
     image_bytes = await file.read()
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="Empty image file")
+    validate_image_bytes(image_bytes)
 
     #  Run inference
     result = predict_image(image_bytes)
@@ -111,7 +111,6 @@ async def analyze_drone_image(
 
 @router.post("/detections/{detection_id}/alert")
 async def send_drone_alert(detection_id: int, db: Session = Depends(get_db)):
-    
     detection = db.query(Detection).filter(Detection.id == detection_id).first()
     if not detection:
         raise HTTPException(status_code=404, detail="Detection not found")

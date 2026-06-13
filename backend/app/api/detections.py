@@ -13,6 +13,7 @@ from app.utils.supabase_upload import upload_detection_image
 from app.ml.model_utils import predict_image
 from app.ml.ai_helper import get_short_remedy
 from app.utils.rate_limiter import rate_limit
+from app.utils.image_validation import validate_image_bytes
 from app.api.alerts import create_alert_internal
 from datetime import datetime
 
@@ -49,8 +50,7 @@ async def predict_disease(
     rate_limit(request, max_requests=10, window_seconds=60)
     try:
         image_bytes = await file.read()
-        if not image_bytes:
-            return {"error": "Empty image file"}
+        validate_image_bytes(image_bytes)
 
         unique_filename = f"{uuid.uuid4()}.jpg"
         image_url = upload_detection_image(image_bytes, unique_filename)
@@ -244,7 +244,7 @@ def get_detection_detail(detection_id: int, db: Session = Depends(get_db)):
 
 @router.patch("/{detection_id}/resolve")
 def resolve_detection(detection_id: int, db: Session = Depends(get_db)):
-   
+    
     detection = db.query(Detection).filter(Detection.id == detection_id).first()
     if not detection:
         raise HTTPException(status_code=404, detail="Detection not found")
@@ -276,7 +276,7 @@ def delete_detection(
     device_id: str = None,
     db: Session = Depends(get_db),
 ):
-    
+   
     try:
         report = db.query(Report).filter(Report.id == report_id).first()
 
