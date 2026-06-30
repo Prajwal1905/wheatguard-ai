@@ -45,8 +45,8 @@ The system consists of three parts:
 
 | Demo | Link |
 |---|---|
-| Mobile App Demo | [Watch Mobile App Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
-| Dashboard Demo | [Watch Dashboard Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
+| Mobile App Demo | updating... |
+| Dashboard Demo | updating...|
 
 ---
 
