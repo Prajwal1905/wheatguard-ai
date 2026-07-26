@@ -10,7 +10,6 @@ import time
 from app.db.database import init_db
 from dotenv import load_dotenv
 load_dotenv()
-
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -18,6 +17,8 @@ ALLOWED_ORIGINS = [
     "http://localhost:80",
     "http://127.0.0.1",
     "http://127.0.0.1:80",
+    "https://wheatguard-ai.vercel.app",
+    "https://wheatguard-ai-git-main-prajwal1905s-projects.vercel.app",
 ]
 
 sio = socketio.AsyncServer(
