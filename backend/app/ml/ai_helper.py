@@ -257,7 +257,7 @@ REMINDER: Your entire response must be in {lang_full}. Not English.
 
     try:
         resp = client.chat.completions.create(
-            model="meta-llama/llama-3.1-8b-instruct",
+            model="google/gemma-4-26b-a4b-it:free",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500,
         )
