@@ -257,7 +257,7 @@ REMINDER: Your entire response must be in {lang_full}. Not English.
 
     try:
         resp = client.chat.completions.create(
-            model="x-ai/grok-3",
+            model="meta-llama/llama-3.1-8b-instruct:free",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500,
         )
