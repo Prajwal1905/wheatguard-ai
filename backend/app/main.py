@@ -110,7 +110,7 @@ OPEN_PREFIXES = (
     "/api/nasa_ndvi_value",
     "/api/nasa_ndvi_polygon",
     "/api/ndvi_history",
-
+    "/api/sentinel_ndvi_polygon",
     "/upload/image",
 
     "/fcm/register",
