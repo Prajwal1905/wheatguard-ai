@@ -9,6 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   const token = localStorage.getItem("token");
   if (token) return <Navigate to="/" replace />;
@@ -20,7 +21,6 @@ export default function Login() {
       const res = await axios.post(`${API_BASE}/admin/login`, { email, password });
       localStorage.setItem("token", res.data.token);
       window.location.href = "/";
-    // eslint-disable-next-line no-unused-vars
     } catch (err) {
       setError("Invalid email or password.");
     } finally {
@@ -36,9 +36,18 @@ export default function Login() {
     <div style={styles.page}>
       <div style={styles.card}>
         <div style={styles.logoWrap}>
-          <div style={styles.logoIcon}>
-            <i className="ti ti-plant-2" style={{ color: "#fff", fontSize: 22 }} aria-hidden="true" />
-          </div>
+          {!logoError ? (
+            <img
+              src="/logo.png"
+              alt="WheatGuard"
+              style={styles.logoImg}
+              onError={() => setLogoError(true)}
+            />
+          ) : (
+            <div style={styles.logoIcon}>
+              <i className="ti ti-plant-2" style={{ color: "#fff", fontSize: 22 }} aria-hidden="true" />
+            </div>
+          )}
           <h1 style={styles.appName}>WheatGuard</h1>
           <p style={styles.appSub}>Admin portal</p>
         </div>
@@ -123,11 +132,18 @@ const styles = {
     textAlign: "center",
     marginBottom: 28,
   },
+  logoImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    objectFit: "cover",
+    marginBottom: 10,
+  },
   logoIcon: {
-    width: 44,
-    height: 44,
+    width: 56,
+    height: 56,
     background: "#1B5E20",
-    borderRadius: 10,
+    borderRadius: 12,
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
@@ -156,9 +172,7 @@ const styles = {
     gap: 7,
     border: "0.5px solid #F7C1C1",
   },
-  fieldWrap: {
-    marginBottom: 14,
-  },
+  fieldWrap: { marginBottom: 14 },
   label: {
     display: "block",
     fontSize: 13,
@@ -173,13 +187,8 @@ const styles = {
     borderRadius: 8,
     padding: "0 12px",
     background: "#fafafa",
-    transition: "border-color 0.15s",
   },
-  inputIcon: {
-    fontSize: 16,
-    color: "#999",
-    marginRight: 8,
-  },
+  inputIcon: { fontSize: 16, color: "#999", marginRight: 8 },
   input: {
     flex: 1,
     border: "none",
@@ -204,6 +213,5 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
-    transition: "background 0.15s",
   },
 };

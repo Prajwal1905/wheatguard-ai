@@ -18,7 +18,17 @@ export default function Sidebar() {
   return (
     <aside style={styles.sidebar}>
       <div style={styles.brand}>
-        <div style={styles.logoIcon}>
+        <img
+          src="/logo.png"
+          alt="WheatGuard logo"
+          style={styles.logoImg}
+          onError={(e) => {
+            // fallback to icon if image fails to load
+            e.target.style.display = "none";
+            e.target.nextSibling.style.display = "flex";
+          }}
+        />
+        <div style={{ ...styles.logoIcon, display: "none" }}>
           <i className="ti ti-plant-2" style={{ color: "#fff", fontSize: 18 }} aria-hidden="true" />
         </div>
         <span style={styles.brandName}>WheatGuard</span>
@@ -80,12 +90,18 @@ const styles = {
     gap: 10,
     padding: "20px 16px 18px",
   },
+  logoImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    objectFit: "cover",
+    flexShrink: 0,
+  },
   logoIcon: {
     width: 32,
     height: 32,
     background: "rgba(255,255,255,0.15)",
     borderRadius: 8,
-    display: "flex",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -134,9 +150,7 @@ const styles = {
     background: "rgba(255,255,255,0.08)",
     color: "rgba(255,255,255,0.9)",
   },
-  navLabel: {
-    fontSize: 13,
-  },
+  navLabel: { fontSize: 13 },
   footer: {
     padding: "12px 16px",
     borderTop: "0.5px solid rgba(255,255,255,0.1)",
