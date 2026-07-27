@@ -1,43 +1,23 @@
-An AI-powered wheat disease detection and monitoring platform for Indian farmers.
-Built for Smart India Hackathon 2025 — Selected in Top 5 Projects Nationally.
+# WheatGuard AI 
+
+An AI-powered wheat disease detection and monitoring platform for Indian farmers.  
+Built for **Smart India Hackathon 2025** — Selected in **Top 5 Projects Nationally**.
 
 WheatGuard AI combines mobile disease detection, satellite NDVI monitoring, drone analysis,
 and real-time outbreak alerts into one unified system for Indian wheat farmers.
 
 ---
 
-## Table of Contents
+##  Live Demo
 
-- [About the Project](#about-the-project)
-- [Demo Videos](#demo-videos)
-- [SIH 2025 Achievement](#sih-2025-achievement)
-- [Problem Statement](#problem-statement)
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Running with Docker](#running-with-docker)
-- [Flutter Mobile App](#flutter-mobile-app)
-- [Model Training](#model-training)
-- [API Documentation](#api-documentation)
-- [Disease Classes](#disease-classes)
-- [Update and Deployment Workflow](#update-and-deployment-workflow)
-- [Author](#author)
+| Service | Link |
+|---|---|
+|  Admin Dashboard | [wheatguard-ai.vercel.app](https://wheatguard-ai.vercel.app) |
+|  Backend API | [wheatguard-ai.onrender.com](https://wheatguard-ai.onrender.com) |
+|  API Docs (Swagger) | [wheatguard-ai.onrender.com/docs](https://wheatguard-ai.onrender.com/docs) |
+|  Android APK | [Download APK](https://drive.google.com/file/d/1sq640uyQHicmsm4VjU_ZGyEGEL6z-YPu/view?usp=sharing) |
 
----
-
-## About the Project
-
-WheatGuard AI is a full-stack agricultural intelligence system that helps Indian wheat farmers
-detect crop diseases early, monitor field health using satellite NDVI data, and receive
-real-time outbreak alerts in their local language.
-
-The system consists of three parts:
-
-- Flutter Mobile App — for farmers to capture and detect wheat diseases offline and online
-- React Admin Dashboard — for agronomists to monitor detections, alerts, maps, and drone analysis
-- FastAPI Backend — AI inference, NDVI monitoring, real-time socket alerts, and database management
+> **Note:** Backend is hosted on Render free tier — first request after inactivity may take 30-50 seconds to wake up.
 
 ---
 
@@ -45,15 +25,15 @@ The system consists of three parts:
 
 | Demo | Link |
 |---|---|
-| Mobile App Demo | updating... |
-| Dashboard Demo | updating...|
+|  Mobile App Demo | [Watch Mobile App Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
+| Dashboard Demo | [Watch Dashboard Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
 
 ---
 
-## SIH 2025 Achievement
+##  SIH 2025 Achievement
 
-This project was built for Smart India Hackathon 2025 and was selected among the
-Top 5 Projects Nationally in the agriculture and rural development category.
+This project was built for **Smart India Hackathon 2025** and was selected among the
+**Top 5 Projects Nationally** in the agriculture and rural development category.
 
 The project addresses a real problem faced by wheat farmers in India — late detection
 of crop diseases leading to massive yield loss every year. WheatGuard AI provides
@@ -62,7 +42,7 @@ rural areas.
 
 ---
 
-## Problem Statement
+##  Problem Statement
 
 | Field | Detail |
 |---|---|
@@ -91,15 +71,15 @@ data and mobile apps to provide real-time detection, mapping, and alerts to farm
 
 | Expected Solution Component | WheatGuard AI Implementation |
 |---|---|
-| AI/ML-based image recognition | 19-class EfficientNet-B3 ONNX model, detecting all major fungal (rust, smut, blight, Karnal bunt, powdery mildew), bacterial (Black Chaff), and viral (BYDV) diseases listed in the problem statement |
-| Drone data integration | Dedicated Drone Analysis page — officers survey fields, model analyzes images, admin reviews results and decides whether to alert nearby farmers |
+| AI/ML-based image recognition | 19-class EfficientNet-B3 ONNX model, detecting all major fungal (rust, smut, blight, Karnal bunt, powdery mildew), bacterial (Black Chaff), and viral (BYDV) diseases |
+| Drone data integration | Dedicated Drone Analysis page — officers survey fields, admin reviews AI results and decides whether to alert nearby farmers |
 | Satellite data integration | Live Sentinel-2 NDVI (Copernicus CDSE) with cloud masking, plus NASA VIIRS/MODIS — detects crop stress before visible symptoms appear |
 | Mobile app for farmers | Flutter app — offline-capable, multilingual (English/Hindi/Marathi), voice input, AI chatbot, text-to-speech remedies |
 | Real-time detection, mapping, and alerts | Socket.IO live map updates, FCM push notifications to farmers within a configurable radius, geotagged detection mapping |
 
 ---
 
-## Features
+##  Features
 
 ### Mobile App (Flutter)
 
@@ -116,45 +96,37 @@ data and mobile apps to provide real-time detection, mapping, and alerts to farm
 - Offline-first with automatic sync when back online
 - Watermarked photos with GPS coordinates and timestamp
 
-### Admin Dashboard (React)
+###  Admin Dashboard (React)
 
-- Real-time disease detection dashboard
+- Real-time disease detection dashboard with live stats
 - Live disease map with heatmap and satellite NDVI overlay
-- Drone image analysis and mapping
+- Drone image analysis with review-then-alert workflow
 - NDVI stress monitoring using Sentinel-2 and NASA VIIRS
-- Multi-source alert management — NDVI stress, drone, and manual alerts
+- Multi-source alert management — NDVI stress, drone, and mobile alerts
 - Reports with CSV and PDF export
 - Live WebSocket feed for new detections
 - JWT-based admin authentication
-- Resolve/reopen lifecycle for detections and NDVI stress alerts —
-  admin can dismiss handled issues (hidden from map/alerts, kept in DB
-  for history); NDVI stress alerts auto-resolve when crop health recovers
-- Drone analysis uses a "review then alert" flow — admin sees the AI
-  result first and explicitly decides whether to notify nearby farmers,
-  rather than auto-alerting on every detection
+- Resolve/reopen lifecycle for detections and NDVI stress alerts
+- Auto-refresh and notification settings
 
-### Backend (FastAPI)
+###  Backend (FastAPI)
 
 - 19-class EfficientNet-B3 ONNX wheat disease model
-- Sentinel-2 NDVI via Copernicus CDSE API
+- Sentinel-2 NDVI via Copernicus CDSE API with 30-day cloud-masked lookback
 - NASA VIIRS and MODIS NDVI tile serving
 - Real-time Socket.IO broadcasting
 - FCM push notifications with 5km geofencing
 - Scheduled daily NDVI stress scanning via APScheduler
 - PostgreSQL with PostGIS database
 - Supabase storage for detection images
-- AI remedy generation via OpenRouter (Grok model)
-- Redis-backed caching (NDVI values, 24h TTL) and rate limiting,
-  with graceful fail-open if Redis is unavailable
+- AI remedy generation via OpenRouter (multilingual — English/Hindi/Marathi)
+- Redis-backed caching (NDVI values, 24h TTL) and rate limiting
 - Bcrypt-hashed admin credentials with constant-time comparison
-- Upload validation — rejects oversized or non-image files before
-  they reach the ML pipeline
-- Sentinel-2 NDVI requests use a 30-day lookback with least-cloud
-  mosaicking and SCL-based cloud masking for accurate readings
+- Image upload validation — rejects oversized or non-image files
 
 ---
 
-## Project Structure
+##  Project Structure
 
 ```
 wheatguard-ai/
@@ -162,27 +134,11 @@ wheatguard-ai/
 ├── backend/                          # FastAPI Python backend
 │   ├── app/
 │   │   ├── api/                      # API route handlers
-│   │   │   ├── admin_auth.py         # JWT authentication
-│   │   │   ├── alerts.py             # Disease alerts
-│   │   │   ├── detections.py         # Disease detection
-│   │   │   ├── drone.py              # Drone image analysis
-│   │   │   ├── fields.py             # Field registration
-│   │   │   ├── fcm_tokens.py         # Push notifications
-│   │   │   ├── nasa_ndvi.py          # NASA NDVI data
-│   │   │   ├── sentinel_ndvi.py      # Sentinel-2 NDVI
-│   │   │   ├── ndvi_history.py       # NDVI history tracking
-│   │   │   ├── upload.py             # Image uploads
-│   │   │   ├── local_sync.py         # Offline detection sync
-│   │   │   └── ai_explain.py         # AI remedy and chatbot
-│   │   ├── db/
-│   │   │   └── database.py           # SQLAlchemy setup
-│   │   ├── ml/
-│   │   │   ├── model_utils.py        # ONNX inference engine
-│   │   │   ├── ai_helper.py          # AI remedy generation
-│   │   │   └── wheat_disease_b3.onnx # ML model (download separately)
+│   │   ├── db/                       # SQLAlchemy setup
+│   │   ├── ml/                       # ONNX inference engine + AI helper
 │   │   ├── models/                   # SQLAlchemy database models
 │   │   ├── middleware/               # JWT auth middleware
-│   │   ├── utils/                    # Socket, FCM, Supabase, cache, rate limiter helpers
+│   │   ├── utils/                    # Cache, rate limiter, FCM, Supabase
 │   │   ├── main.py                   # FastAPI application entry point
 │   │   └── scheduler.py              # Scheduled NDVI scan jobs
 │   ├── Dockerfile
@@ -192,14 +148,13 @@ wheatguard-ai/
 ├── frontend-web/                     # React Admin Dashboard
 │   ├── src/
 │   │   ├── pages/                    # Dashboard, LiveMap, Alerts, Reports, Drone
-│   │   ├── components/               # MapView, StatsCards, Charts, etc.
-│   │   ├── services/
-│   │   │   ├── api.js                # Axios API client with auth interceptor
-│   │   │   └── socket.js             # Socket.IO real-time client
+│   │   ├── components/               # MapView, DetectionDetailPanel, etc.
+│   │   ├── services/                 # Axios API client + Socket.IO client
 │   │   └── layout/                   # AdminLayout, Sidebar, Topbar
+│   ├── public/
+│   │   └── logo.png                  # App logo
 │   ├── Dockerfile
-│   ├── nginx.conf
-│   └── .env                          # Not in git
+│   └── nginx.conf
 │
 ├── frontend_mobile/
 │   └── wheat_disease_clean/          # Flutter Mobile App
@@ -217,35 +172,35 @@ wheatguard-ai/
 
 ---
 
-## Tech Stack
+##  Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Mobile | Flutter 3.35, Dart 3.9 |
-| Frontend | React 19, Vite, Material UI, Leaflet, Recharts |
+| Frontend | React 19, Vite, Leaflet, Recharts |
 | Backend | FastAPI, Python 3.10, SQLAlchemy, Uvicorn |
 | Database | PostgreSQL 15 with PostGIS |
-| Cache / Rate Limiting | Redis |
+| Cache / Rate Limiting | Redis (Upstash in production) |
 | ML Model | EfficientNet-B3 ONNX (19 disease classes) |
 | Offline ML | TFLite (on-device Flutter inference) |
-| AI Chatbot | OpenRouter API with Grok model |
+| AI Chatbot | OpenRouter API (multilingual remedy generation) |
 | Satellite NDVI | Sentinel-2 via Copernicus CDSE and NASA VIIRS/MODIS |
 | Image Storage | Supabase Storage |
 | Realtime | Socket.IO |
 | Push Notifications | Firebase Cloud Messaging (FCM) |
 | Authentication | JWT (JSON Web Tokens) |
-| Security | Bcrypt password hashing, JWT auth, Redis-backed rate limiting, image upload validation |
+| Security | Bcrypt password hashing, Redis-backed rate limiting, image upload validation |
 | Containerization | Docker and Docker Compose |
-| Web Server | Nginx |
+| Hosting | Render (backend), Vercel (frontend), Supabase (database) |
+| ML Model Hosting | Hugging Face Hub |
 
 ---
 
-## Getting Started
+##  Getting Started
 
 ### Prerequisites
 
 - Docker Desktop installed and running
-  Download: https://www.docker.com/products/docker-desktop/
 - Git installed
 - API keys for Sentinel, Supabase, OpenRouter, and Firebase
 
@@ -264,24 +219,18 @@ The ML model file is too large for GitHub (42MB). Download it and place at:
 backend/app/ml/wheat_disease_b3.onnx
 ```
 
-Download link:
-https://drive.google.com/file/d/1_9LBfR38U32R03_DwxgWtw0XsIW61PJH/view?usp=sharing
+Download link: https://drive.google.com/file/d/1_9LBfR38U32R03_DwxgWtw0XsIW61PJH/view?usp=sharing
 
-Or download directly via command line:
-
+Or via Hugging Face:
 ```bash
-# Install gdown first
-pip install gdown
-
-# Download model directly to correct folder
-gdown 1_9LBfR38U32R03_DwxgWtw0XsIW61PJH -O backend/app/ml/wheat_disease_b3.onnx
+wget https://huggingface.co/prajwalshr/wheatguard-disease-detection/resolve/main/wheat_disease_b3.onnx -O backend/app/ml/wheat_disease_b3.onnx
 ```
 
 ---
 
-## Environment Variables
+##  Environment Variables
 
-### Root `.env` (create at project root)
+### Root `.env`
 
 ```env
 POSTGRES_USER=postgres
@@ -290,7 +239,7 @@ POSTGRES_DB=wheatguard
 POSTGRES_PORT=5432
 ```
 
-### `backend/.env` (create inside backend folder)
+### `backend/.env`
 
 ```env
 # Database
@@ -307,10 +256,6 @@ SENTINEL_CLIENT_ID=your_sentinel_client_id
 SENTINEL_CLIENT_SECRET=your_sentinel_secret
 SENTINEL_INSTANCE_ID=your_sentinel_instance_id
 
-# Planet (optional)
-PLANET_API_KEY=your_planet_key
-PLANET_USER_ID=your_planet_user_id
-
 # Supabase Storage
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_key
@@ -321,13 +266,13 @@ FCM_SERVER_KEY=your_fcm_server_key
 
 # Admin Authentication
 ADMIN_EMAIL=admin@yourdomain.com
-# Generate with: python -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt()).decode())"
+# Generate: python -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt()).decode())"
 ADMIN_PASSWORD_HASH=your_bcrypt_hash
-# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+# Generate: python -c "import secrets; print(secrets.token_hex(32))"
 ADMIN_SECRET=your_jwt_secret_key
 ```
 
-### `frontend-web/.env` (create inside frontend-web folder)
+### `frontend-web/.env`
 
 ```env
 VITE_API_BASE=http://localhost:8000
@@ -335,7 +280,7 @@ VITE_API_BASE=http://localhost:8000
 
 ---
 
-## Running with Docker
+##  Running with Docker
 
 ```bash
 # Build and start all services
@@ -346,15 +291,6 @@ docker-compose up --build -d
 
 # Stop all services
 docker-compose down
-
-# Rebuild only backend
-docker-compose up --build backend
-
-# Rebuild only frontend
-docker-compose up --build frontend
-
-# Restart backend without rebuild
-docker-compose restart backend
 ```
 
 ### Access the Application
@@ -369,7 +305,7 @@ docker-compose restart backend
 
 ---
 
-## Flutter Mobile App
+##  Flutter Mobile App
 
 ### Setup
 
@@ -380,26 +316,16 @@ flutter pub get
 
 ### Configure Backend URL
 
-Open `lib/config.dart` and set your backend URL:
+Open `lib/config.dart`:
 
 ```dart
 class AppConfig {
-  // For testing on phone via hotspot - use your laptop IP
-  static const String baseUrl = "http://YOUR_LAPTOP_IP:8000";
+  // Production server
+  static const String baseUrl = "https://wheatguard-ai.onrender.com";
 
-  // For local emulator testing
-  // static const String baseUrl = "http://10.0.2.2:8000";
-
-  // For production server
-  // static const String baseUrl = "http://YOUR_SERVER_IP:8000";
+  // For local testing (hotspot)
+  // static const String baseUrl = "http://YOUR_LAPTOP_IP:8000";
 }
-```
-
-To find your laptop IP on Windows:
-
-```bash
-ipconfig
-# Look for IPv4 Address under your WiFi adapter
 ```
 
 ### Run on Device
@@ -414,21 +340,21 @@ flutter run
 flutter build apk --release
 ```
 
-APK will be at:
+APK location: `build/app/outputs/flutter-apk/app-release.apk`
 
-```
-build/app/outputs/flutter-apk/app-release.apk
-```
+### Download APK
+
+[ Download WheatGuard APK](https://drive.google.com/file/d/1sq640uyQHicmsm4VjU_ZGyEGEL6z-YPu/view?usp=sharing)
 
 ---
 
-## Model Training
+##  Model Training
 
 The EfficientNet-B3 model was trained on Kaggle using a custom wheat disease dataset
 with 19 classes including various rust types, blights, insects, and healthy crops.
 
-View the full training notebook on Kaggle:
-https://www.kaggle.com/code/prajwalkhade/notebook8c36116641
+**Kaggle Notebook:** https://www.kaggle.com/code/prajwalkhade/notebook8c36116641  
+**Hugging Face Model:** https://huggingface.co/prajwalshr/wheatguard-disease-detection
 
 ### Training Details
 
@@ -441,22 +367,11 @@ https://www.kaggle.com/code/prajwalkhade/notebook8c36116641
 | Export Format | ONNX for backend, TFLite for mobile |
 | Training Platform | Kaggle GPU T4 x2 |
 
-### Model Files
-
-| File | Size | Purpose |
-|---|---|---|
-| wheat_disease_b3.onnx | 42 MB | Backend inference via ONNX Runtime |
-| wheat_disease_b3_float16.tflite | ~11 MB | Flutter offline inference |
-
 ---
 
-## API Documentation
+##  API Documentation
 
-Once the backend is running visit:
-
-```
-http://localhost:8000/docs
-```
+Live API docs: **https://wheatguard-ai.onrender.com/docs**
 
 ### Key Endpoints
 
@@ -464,38 +379,24 @@ http://localhost:8000/docs
 |---|---|---|
 | POST | /detections/predict | Predict disease from image |
 | GET | /detections/map_data | Get all detections for map |
-| GET | /detections/{id} | Get detection detail (remedy, image, etc.) |
-| PATCH | /detections/{id}/resolve | Mark detection as resolved (admin) |
+| PATCH | /detections/{id}/resolve | Mark detection as resolved |
 | PATCH | /detections/{id}/reopen | Reopen a resolved detection |
-| DELETE | /detections/{id} | Delete a detection (device-owned, mobile) |
-| GET | /alerts/ | Get all disease alerts |
-| POST | /alerts/ | Create new alert |
-| GET | /alerts/nearby | Get alerts within configured radius |
-| PATCH | /alerts/{id}/resolve | Resolve an alert |
-| PATCH | /alerts/{id}/reopen | Reopen an alert |
 | POST | /drone/analyze | Analyze drone image |
-| POST | /drone/detections/{id}/alert | Admin sends alert to nearby farmers for a drone detection |
-| GET | /api/sentinel_ndvi_value | Get Sentinel-2 NDVI for location (cloud-masked, 30-day lookback) |
-| POST | /api/sentinel_ndvi_polygon | Get average NDVI for a field polygon |
+| POST | /drone/detections/{id}/alert | Send alert to nearby farmers |
+| GET | /api/sentinel_ndvi_value | Get Sentinel-2 NDVI for location |
+| POST | /api/sentinel_ndvi_polygon | Get NDVI for field polygon |
 | GET | /api/ndvi/stress | Get active NDVI stress alerts |
-| POST | /api/ndvi/stress/scan | Run NDVI stress scan (auto-resolves recovered locations) |
-| PATCH | /api/ndvi/stress/{id}/resolve | Manually resolve an NDVI stress alert |
-| GET | /api/ndvi_history | Get NDVI history for location |
+| POST | /api/ndvi/stress/scan | Run NDVI stress scan |
 | GET | /fields/ | Get all registered fields |
-| POST | /fields/ | Register new field with photos |
-| PUT | /fields/{id} | Update field details |
-| DELETE | /fields/{id} | Delete a field |
-| POST | /admin/login | Admin login returns JWT token |
+| POST | /admin/login | Admin login — returns JWT token |
 | POST | /ai/chat | AI chatbot reply for farmers |
-| POST | /ai/remedy | Get short remedy for disease |
-| POST | /ai/explain | Get detailed AI explanation |
+| POST | /ai/remedy | Get multilingual remedy for disease |
 | POST | /fcm/register | Register device FCM token |
-| POST | /upload/image | Upload image to Supabase |
 | POST | /sync/local-detection | Sync offline mobile detection |
 
 ---
 
-## Disease Classes
+##  Disease Classes
 
 The model detects 19 wheat conditions:
 
@@ -523,42 +424,9 @@ The model detects 19 wheat conditions:
 
 ---
 
-## Update and Deployment Workflow
-
-```bash
-# 1. Make your code changes in VS Code
-
-# 2. Commit your changes
-git add .
-git commit -m "feat: describe your change"
-git push origin main
-
-# 3. Rebuild Docker
-docker-compose up --build
-```
-
-### Partial Rebuilds (faster)
-
-```bash
-# Only backend changed
-docker-compose up --build backend
-
-# Only frontend changed
-docker-compose up --build frontend
-
-# Quick restart without rebuild
-docker-compose restart backend
-
-# Database schema changed - full restart needed
-docker-compose down
-docker-compose up --build
-```
-
----
-
 ## Author
 
-Prajwal Khade
+**Prajwal Khade**
 
 - GitHub: https://github.com/Prajwal1905
 - Email: prajwalkhade19@gmail.com
@@ -566,17 +434,19 @@ Prajwal Khade
 
 ---
 
-## Acknowledgements
+##  Acknowledgements
 
 - Smart India Hackathon 2025 — Top 5 Selection
 - Copernicus Data Space Ecosystem for Sentinel-2 satellite data
 - NASA EARTHDATA for VIIRS and MODIS NDVI
 - OpenRouter for AI chatbot API access
-- Supabase for image storage
+- Supabase for image storage and database
 - Firebase for push notification infrastructure
+- Hugging Face for ML model hosting
+- Render and Vercel for free hosting
 
 ---
 
-This project was built to help Indian wheat farmers protect their crops using
-artificial intelligence, satellite technology, and real-time monitoring 
-making advanced agricultural tools accessible to every farmer.
+*This project was built to help Indian wheat farmers protect their crops using
+artificial intelligence, satellite technology, and real-time monitoring —
+making advanced agricultural tools accessible to every farmer.*
