@@ -225,7 +225,7 @@ export default function MapView({
   const [clicked, setClicked] = useState(null);
   const [localCenter, setLocalCenter] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
-  
+ 
   const [searchOpen, setSearchOpen] = useState(false);
 
   const center = forceCenter || localCenter;
@@ -257,7 +257,7 @@ export default function MapView({
 
   return (
     <div style={styles.root}>
-      
+      {/* ── Layers panel — top-right, compact ── */}
       <div style={styles.layerPanel}>
         <div style={styles.layerPanelLabel}>
           <i className="ti ti-layers-intersect" style={{ fontSize: 12 }} aria-hidden="true" />
@@ -272,7 +272,7 @@ export default function MapView({
         <LayerToggle active={ndviOn} onClick={() => setNdviOn(!ndviOn)} icon="ti-leaf" label="Field NDVI" hint="Crop health from satellite" />
       </div>
 
-     
+    
       <button
         onClick={() => setSearchOpen((o) => !o)}
         style={styles.searchToggleBtn}
@@ -357,7 +357,7 @@ export default function MapView({
             icon={severityIcon(d.severity)}
             eventHandlers={{ click: () => {
               
-              if (typeof d.id === "number") setSelectedId(d.id);
+              if (d.type !== "stress") setSelectedId(d.id);
             } }}
           >
             <Popup>
@@ -467,12 +467,12 @@ const styles = {
   root: { position: "relative", height: "75vh", width: "100%", borderRadius: 12, overflow: "hidden", border: "0.5px solid rgba(0,0,0,0.08)" },
   map: { height: "100%", width: "100%" },
 
- 
   layerPanel: { position: "absolute", top: 10, right: 10, zIndex: 5000, background: "#fff", borderRadius: 10, padding: 10, width: 175, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", border: "0.5px solid rgba(0,0,0,0.08)" },
   layerPanelLabel: { fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 5, marginBottom: 8 },
   layerPanelGroup: { display: "flex", background: "#f2f2f2", borderRadius: 7, padding: 3, gap: 2 },
   layerPanelDivider: { height: 1, background: "rgba(0,0,0,0.06)", margin: "10px 0" },
 
+ 
   searchToggleBtn: { position: "absolute", bottom: 48, left: 10, zIndex: 5000, background: "#fff", border: "0.5px solid rgba(0,0,0,0.15)", borderRadius: 20, padding: "7px 14px", fontSize: 12, fontWeight: 500, color: "#333", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.12)" },
 
   
