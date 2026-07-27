@@ -9,7 +9,7 @@ USE_REDIS = os.getenv("REDIS_URL") is not None
 
 if USE_REDIS:
     import redis
-    rcache = redis.Redis.from_url(os.getenv("REDIS_URL"))
+    rcache = redis.Redis.from_url(os.getenv("REDIS_URL"), ssl_cert_reqs=None)
 else:
     # In-memory store: ip -> list of request timestamps
     _request_log: dict = defaultdict(list)
