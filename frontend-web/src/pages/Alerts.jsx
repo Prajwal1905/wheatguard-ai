@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 const TABS = [
   { key: "stress", label: "NDVI stress", icon: "ti-leaf" },
   { key: "drone", label: "Drone", icon: "ti-drone" },
-  { key: "manual", label: "Manual", icon: "ti-alert-triangle" },
+  { key: "manual", label: "Mobile / Manual", icon: "ti-device-mobile" },
 ];
 
 const SEVERITIES = ["All", "Critical", "High", "Moderate", "Low"];
@@ -32,7 +32,14 @@ export default function Alerts() {
       setStressAlerts(stress);
       const mapData = await getMapData();
       setDroneAlerts(mapData.filter((x) => x.source === "drone"));
-      setManualAlerts(mapData.filter((x) => x.source === "manual"));
+      setManualAlerts(
+        mapData.filter(
+          (x) =>
+            x.source === "mobile" ||
+            x.source === "local-mobile" ||
+            x.source === "manual",
+        ),
+      );
     } catch (err) {
       console.error(err);
     }
