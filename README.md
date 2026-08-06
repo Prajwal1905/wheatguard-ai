@@ -26,7 +26,6 @@ and real-time outbreak alerts into one unified system for Indian wheat farmers.
 | Demo | Link |
 |---|---|
 |  Mobile App Demo | [Watch Mobile App Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
-| Dashboard Demo | [Watch Dashboard Demo](https://drive.google.com/drive/u/0/folders/1BtP6JX5aHjyIPh-mO1HGKTnorw-nyjvn) |
 
 ---
 
