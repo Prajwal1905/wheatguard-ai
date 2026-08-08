@@ -66,6 +66,10 @@ often spread rapidly, causing widespread crop damage if not detected early.
 Development of AI/ML-based image recognition tools integrated with drone/satellite
 data and mobile apps to provide real-time detection, mapping, and alerts to farmers.
 
+## System Architecture
+
+![WheatGuard AI System Architecture](docs/architecture.png)
+
 ### How WheatGuard AI Addresses This
 
 | Expected Solution Component | WheatGuard AI Implementation |
